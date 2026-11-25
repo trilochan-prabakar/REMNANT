@@ -1,5 +1,7 @@
 # REMNANT
 
+[![Tests](https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml/badge.svg)](https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml)
+
 **REMNANT V1 — Stateful Cache–Authorization Consistency Testing Framework**
 
 REMNANT runs a controlled experiment that checks whether a protected response can still be served from Redis after the protected origin revokes access. It records the observed steps in SQLite and can produce JSON and standalone HTML reports.
@@ -48,7 +50,6 @@ The system components and experiment sequence are documented in [Architecture](d
 ```text
 .
 ├── README.md
-├── Rem_Ins_*.txt                 # Phase handoff instructions
 ├── docker-compose.yml            # Redis service
 ├── pyproject.toml                # Package metadata and dependencies
 ├── docs/
