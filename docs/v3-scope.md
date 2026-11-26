@@ -80,3 +80,18 @@ for controlled systems that the operator owns or is authorized to test.
 
 Each stage must have tests and a definition of done. No feature is added merely because a
 reference project has it; it must strengthen REMNANT's stated objective.
+
+
+## Implementation status
+
+The following planned V3 capabilities have been implemented on the `v3-development` branch:
+
+- [x] HTTP cache directive parsing, common cache-state headers, Age/Date/Expires freshness estimate, and Authorization-response diagnostics.
+- [x] Strict YAML scenario schema with relative-path-only requests, GET/HEAD allowlist, header validation, bounded step count, and no executable scenario content.
+- [x] Asynchronous origin/proxy scenario runner with per-request timeouts, response-size cap, no redirects, redacted evidence, and explicit PASS/FAIL/ERROR outcomes.
+- [x] Independent four-condition identity-isolation oracle.
+- [x] Separate transactional V3 SQLite evidence store and deterministic run comparison.
+- [x] Isolated real Varnish fixture covering stale replay and cross-principal cache-key collision.
+- [x] V3-specific GitHub Actions workflow and tests.
+
+Completion is not declared until the full existing regression suite, the V3-specific suite, and the Varnish integration workflow pass. CI results and any remaining limitations must be recorded before V3 is considered release-ready.

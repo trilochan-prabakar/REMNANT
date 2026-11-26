@@ -57,6 +57,24 @@ are omitted. Sensitive query parameter values are redacted in trace paths.
 The body marker assertion is evaluated in memory. The marker itself is not
 copied into the trace.
 
+## Persist and compare runs
+
+```python
+from remnant.v3 import V3EvidenceStore
+
+store = V3EvidenceStore("reports/v3-evidence.sqlite3")
+store.save(result)
+previous = store.list_runs(scenario_id=scenario.scenario_id, limit=2)
+if len(previous) == 2:
+    comparison = store.compare(previous[1]["run_id"], previous[0]["run_id"])
+    print(comparison)
+```
+
+The V3 evidence database is separate from the frozen V2 evidence schema. Writes
+are transactional, run IDs are unique, and comparisons report changed steps,
+status codes, body digests, cache diagnostics, and assertion outcomes. Response
+bodies and secret request values are not persisted.
+
 ## Identity isolation
 
 `evaluate_identity_isolation` is a strict, side-effect-free oracle. It confirms
