@@ -99,8 +99,9 @@ class ReportGenerator:
         revoke = evidence_by_stage.get("permission_revocation")
         origin = evidence_by_stage.get("origin_after_revocation")
         replay = evidence_by_stage.get("cache_replay")
+        analysis = self._analysis_record(saved.get("analysis"))
         return {
-            "report_schema_version": "1.0",
+            "report_schema_version": "2.0" if analysis is not None else "1.0",
             "experiment_status": experiment_status,
             "experiment": {
                 "experiment_id": saved.get("experiment_id"),
@@ -131,9 +132,32 @@ class ReportGenerator:
                 ),
             },
             "finding_status": finding_status,
+            "analysis": analysis,
             "stages": stages,
             "issues": issues,
         }
+
+    @staticmethod
+    def _analysis_record(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row.get("analysis_json", "{}"))
+        except (TypeError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        # Return only the versioned, allow-listed analysis object written by
+        # SQLite. This keeps reports free of cache keys and response bodies.
+        allowed = {
+            "schema_version", "initial_origin_status",
+            "cache_prime_observation_status", "cache_prime_metadata",
+            "post_revocation_origin_status", "replay_observation_status",
+            "replay_metadata", "differential", "diagnostic_categories",
+        }
+        if set(payload) != allowed:
+            return None
+        return payload
 
     @classmethod
     def _stage_record(cls, stage_type: str, row: dict[str, Any] | None) -> dict[str, Any]:
@@ -290,6 +314,64 @@ class ReportGenerator:
             f"<strong class=\"condition {cls._condition_class(value)}\">{cls._display(value)}</strong></div>"
             for name, value in conditions.items()
         )
+        analysis = report.get("analysis")
+        if analysis is None:
+            analysis_html = '<p class="muted">Analysis not recorded for this experiment.</p>'
+        else:
+            dimensions = analysis.get("differential", {})
+            dimension_names = (
+                ("status_code", "HTTP status"),
+                ("selected_headers", "Selected headers"),
+                ("body_digest", "Body digest"),
+                ("canary", "Canary"),
+            )
+            dimension_rows = "".join(
+                "<tr>"
+                f"<td>{escape(label)}</td>"
+                f"<td>{cls._display(dimensions.get(key, {}).get('state'))}</td>"
+                "</tr>"
+                for key, label in dimension_names
+            )
+            metadata_rows = "".join(
+                "<tr>"
+                f"<td>{escape(source + ' — ' + field_label)}</td>"
+                f"<td>{cls._display(metadata.get(field))}</td>"
+                "</tr>"
+                for source, metadata in (
+                    ("Cache prime", analysis.get("cache_prime_metadata", {})),
+                    ("Cache replay", analysis.get("replay_metadata", {})),
+                )
+                for field, field_label in (
+                    ("present", "Metadata present"),
+                    ("valid", "Metadata valid"),
+                    ("schema_version", "Metadata schema"),
+                    ("principal_id", "Principal"),
+                    ("resource_id", "Resource"),
+                    ("tenant_id", "Tenant"),
+                    ("response_status", "Response status"),
+                    ("body_sha256", "Body SHA-256"),
+                )
+            )
+            categories = analysis.get("diagnostic_categories", [])
+            category_html = (
+                ", ".join(escape(str(item)) for item in categories)
+                if isinstance(categories, list) and categories
+                else "None recorded"
+            )
+            analysis_html = (
+                "<div class=\"summary\">"
+                f"<div><span>Cache prime observation</span><strong>{cls._display(analysis.get('cache_prime_observation_status'))}</strong></div>"
+                f"<div><span>Replay observation</span><strong>{cls._display(analysis.get('replay_observation_status'))}</strong></div>"
+                f"<div><span>Differential state</span><strong>{cls._display(dimensions.get('state'))}</strong></div>"
+                "</div>"
+                "<h3>Differential dimensions</h3><div class=\"table-wrap\"><table>"
+                "<thead><tr><th>Dimension</th><th>State</th></tr></thead>"
+                f"<tbody>{dimension_rows}</tbody></table></div>"
+                "<h3>Metadata validation</h3><div class=\"table-wrap\"><table>"
+                "<thead><tr><th>Field</th><th>Value</th></tr></thead>"
+                f"<tbody>{metadata_rows}</tbody></table></div>"
+                f"<p>Diagnostic categories: {category_html}</p>"
+            )
         issues = report["issues"]
         issue_html = (
             "<ul>" + "".join(
@@ -356,6 +438,7 @@ td code {{ white-space: pre-wrap; overflow-wrap: anywhere; color: #acc6d9; font-
 <p style="margin:.5rem 0 0">Oracle confirmation: <strong>{cls._display(report['oracle']['finding_confirmed'])}</strong></p></section>
 <section><h2>Experiment timeline</h2><div class="timeline">{cls._timeline(report['stages'])}</div></section>
 </div>
+<section><h2>V2 analysis evidence</h2>{analysis_html}</section>
 <section><h2>Detailed stage evidence</h2><div class="table-wrap"><table><thead><tr><th>Stage</th><th>Status</th><th>Outcome</th><th>HTTP</th><th>Cache</th><th>Canary</th><th>Timestamp</th><th>Details</th></tr></thead><tbody>{stage_rows}</tbody></table></div></section>
 <section><h2>Errors, warnings, and incomplete stages</h2>{issue_html}</section>
 <footer style="margin-top:1rem;color:#6f8ba1;font-size:.72rem">Report schema {escape(report['report_schema_version'])} · Experiment status {escape(report['experiment_status'])}</footer>

@@ -59,6 +59,46 @@ def test_authorized_cache_replay_after_revocation_confirms_finding():
     assert len(redis.values) == 1
 
 
+def test_experiment_uses_v2_observation_and_differential_pipeline():
+    experiment, _, redis = build_experiment()
+
+    result = experiment.run("alice", "document-1", ttl_seconds=30)
+
+    assert result.cache_observation_status == "HIT"
+    assert result.differential_state == "DIFFERENT"
+    stored_payload = next(iter(redis.values.values()))[0]
+    payload = json.loads(stored_payload)
+    assert payload["metadata"]["principal_id"] == "alice"
+    assert payload["metadata"]["resource_id"] == "document-1"
+    assert payload["metadata"]["response_status"] == 200
+    assert len(payload["metadata"]["body_sha256"]) == 64
+
+
+def test_experiment_does_not_confirm_when_cache_metadata_identity_is_wrong():
+    experiment, _, _ = build_experiment()
+    original_store = experiment._cache.store
+
+    def store_with_wrong_identity(key, response, *, ttl_seconds, metadata=None):
+        from remnant.cache.metadata import CacheMetadata
+
+        wrong = CacheMetadata.create(
+            principal_id="mallory",
+            resource_id="document-1",
+            response_status=response.status_code,
+            body=response.body,
+            ttl_seconds=ttl_seconds,
+        )
+        return original_store(key, response, ttl_seconds=ttl_seconds, metadata=wrong)
+
+    experiment._cache.store = store_with_wrong_identity
+    result = experiment.run("alice", "document-1", ttl_seconds=30)
+
+    assert result.cache_primed is False
+    assert result.cache_observation_status == "INVALID_METADATA"
+    assert result.oracle_cache_hit is False
+    assert result.finding_status == "NOT_FOUND"
+
+
 def test_oracle_does_not_confirm_when_origin_allows():
     oracle = evaluate_finding(
         origin_status=200,
@@ -245,3 +285,204 @@ def test_unexpected_origin_http_status_does_not_confirm_finding():
     assert oracle.cache_hit is True
     assert oracle.canary_matches is True
     assert oracle.finding_confirmed is False
+
+
+
+class RecordingOriginAdapter:
+    def __init__(self, policy):
+        from remnant.origin.fastapi import FastAPIOriginAdapter
+
+        self._adapter = FastAPIOriginAdapter(create_protected_origin_app(policy))
+        self.calls = []
+
+    async def get_protected(self, resource_id, *, principal_id):
+        self.calls.append((resource_id, principal_id))
+        return await self._adapter.get_protected(
+            resource_id, principal_id=principal_id
+        )
+
+
+def test_experiment_routes_all_origin_requests_through_injected_adapter():
+    policy = AuthorizationPolicy()
+    adapter = RecordingOriginAdapter(policy)
+    cache = RedisCacheManager(client=ExpiringRedis(), key_prefix="adapter:")
+    experiment = CacheReplayExperiment(
+        cache=cache, policy=policy, origin_adapter=adapter
+    )
+
+    result = experiment.run("alice", "document-1")
+
+    assert result.finding_status == "CONFIRMED"
+    assert adapter.calls == [
+        ("document-1", "alice"),
+        ("document-1", "alice"),
+        ("document-1", "alice"),
+    ]
+
+
+def test_all_origin_requests_in_one_run_share_the_same_event_loop():
+    import asyncio
+
+    class LoopBoundAdapter:
+        def __init__(self, policy):
+            self._adapter = RecordingOriginAdapter(policy)
+            self.loop_ids = []
+
+        async def get_protected(self, resource_id, *, principal_id):
+            self.loop_ids.append(id(asyncio.get_running_loop()))
+            return await self._adapter.get_protected(
+                resource_id, principal_id=principal_id
+            )
+
+    policy = AuthorizationPolicy()
+    adapter = LoopBoundAdapter(policy)
+    experiment = CacheReplayExperiment(
+        cache=RedisCacheManager(client=ExpiringRedis(), key_prefix="loop-bound:"),
+        policy=policy,
+        origin_adapter=adapter,
+    )
+
+    result = experiment.run("alice", "document-1")
+
+    assert result.finding_status == "CONFIRMED"
+    assert len(adapter.loop_ids) == 3
+    assert len(set(adapter.loop_ids)) == 1
+
+
+def test_separate_experiment_runs_receive_separate_event_loops():
+    import asyncio
+
+    class LoopRecordingAdapter:
+        def __init__(self, policy):
+            self._adapter = RecordingOriginAdapter(policy)
+            self.run_loops = []
+
+        async def get_protected(self, resource_id, *, principal_id):
+            loop = asyncio.get_running_loop()
+            if not self.run_loops or self.run_loops[-1] is not loop:
+                self.run_loops.append(loop)
+            return await self._adapter.get_protected(
+                resource_id, principal_id=principal_id
+            )
+
+    policy = AuthorizationPolicy()
+    adapter = LoopRecordingAdapter(policy)
+    experiment = CacheReplayExperiment(
+        cache=RedisCacheManager(client=ExpiringRedis(), key_prefix="loop-run:"),
+        policy=policy,
+        origin_adapter=adapter,
+    )
+
+    first = experiment.run("alice", "document-1")
+    second = experiment.run("bob", "document-1")
+
+    assert first.finding_status == second.finding_status == "CONFIRMED"
+    assert len(adapter.run_loops) == 2
+    assert adapter.run_loops[0] is not adapter.run_loops[1]
+
+
+def test_experiment_rejects_both_origin_app_and_adapter():
+    policy = AuthorizationPolicy()
+    adapter = RecordingOriginAdapter(policy)
+    with pytest.raises(ValueError, match="origin_adapter or origin_app"):
+        CacheReplayExperiment(
+            cache=RedisCacheManager(client=ExpiringRedis()),
+            policy=policy,
+            origin_app=create_protected_origin_app(policy),
+            origin_adapter=adapter,
+        )
+
+
+def test_sync_experiment_fails_clearly_inside_running_event_loop():
+    import asyncio
+
+    experiment, _, _ = build_experiment()
+
+    async def invoke():
+        with pytest.raises(RuntimeError, match="running event loop"):
+            experiment.run("alice", "document-1")
+
+    asyncio.run(invoke())
+    assert experiment._policy.is_allowed(
+        Principal("alice", Role.USER), "document-1"
+    ).allowed is False
+
+
+
+def test_experiment_analysis_evidence_is_serializable_and_body_free():
+    experiment, _, _ = build_experiment()
+    result = experiment.run("alice", "document-1")
+
+    evidence = result.analysis_evidence
+    assert evidence is not None
+    payload = evidence.to_dict()
+    encoded = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema_version"] == 1
+    assert payload["initial_origin_status"] == 200
+    assert payload["cache_prime_observation_status"] == "HIT"
+    assert payload["cache_prime_metadata"]["present"] is True
+    assert payload["cache_prime_metadata"]["valid"] is True
+    assert payload["cache_prime_metadata"]["principal_id"] == "alice"
+    assert payload["cache_prime_metadata"]["resource_id"] == "document-1"
+    assert payload["post_revocation_origin_status"] == 403
+    assert payload["replay_observation_status"] == "HIT"
+    assert payload["replay_metadata"]["valid"] is True
+    assert payload["differential"]["state"] == "DIFFERENT"
+    assert set(payload["differential"]) >= {
+        "status_code", "selected_headers", "body_digest", "canary"
+    }
+    assert "remnant-canary-document-1-7b91c2e4" not in encoded
+    assert "response_body" not in encoded
+    assert "cache_key" not in encoded
+
+
+def test_analysis_evidence_records_safe_metadata_mismatch_category():
+    experiment, _, _ = build_experiment()
+    original_store = experiment._cache.store
+
+    def store_with_wrong_identity(key, response, *, ttl_seconds, metadata=None):
+        from remnant.cache.metadata import CacheMetadata
+
+        wrong = CacheMetadata.create(
+            principal_id="mallory",
+            resource_id="document-1",
+            response_status=response.status_code,
+            body=response.body,
+            ttl_seconds=ttl_seconds,
+        )
+        return original_store(key, response, ttl_seconds=ttl_seconds, metadata=wrong)
+
+    experiment._cache.store = store_with_wrong_identity
+    result = experiment.run("alice", "document-1")
+
+    evidence = result.analysis_evidence
+    assert evidence is not None
+    assert "METADATA_IDENTITY_MISMATCH" in evidence.diagnostic_categories
+    assert evidence.replay_observation_status == "INVALID_METADATA"
+    assert evidence.replay_metadata.valid is False
+
+
+
+def test_legacy_oracle_preserves_hit_when_response_body_is_unavailable():
+    oracle = evaluate_finding(
+        origin_status=403,
+        cache_status=CacheStatus.HIT,
+        response_body=None,
+        expected_canary="expected",
+    )
+
+    assert oracle.origin_denies is True
+    assert oracle.cache_hit is True
+    assert oracle.canary_matches is False
+    assert oracle.finding_confirmed is False
+
+
+@pytest.mark.parametrize("ttl", [0, -1, 1.5, True])
+def test_experiment_rejects_invalid_ttl_before_granting_permission(ttl):
+    experiment, policy, _ = build_experiment()
+
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        experiment.run("alice", "document-1", ttl_seconds=ttl)
+
+    assert policy.is_allowed(Principal("alice", Role.USER), "document-1").allowed is False

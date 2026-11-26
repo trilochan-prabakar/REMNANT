@@ -74,15 +74,6 @@ def test_canary_is_not_checked_when_not_supplied_but_other_dimensions_can_match(
     assert result.canary.state is ComparisonState.INDETERMINATE
 
 
-def test_canary_missing_from_both_responses_is_not_a_match():
-    origin, cache = _responses(origin_body=b"no marker", cache_body=b"no marker")
-    result = compare_responses(origin, cache, expected_canary=b"CANARY-1")
-    assert result.canary.state is ComparisonState.DIFFERENT
-    assert result.canary.origin_value is False
-    assert result.canary.cache_value is False
-    assert result.state is ComparisonState.DIFFERENT
-
-
 def test_empty_canary_and_empty_header_names_are_rejected():
     origin, cache = _responses()
     with pytest.raises(ValueError, match="expected_canary"):

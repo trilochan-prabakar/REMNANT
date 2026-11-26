@@ -2,9 +2,9 @@
 
 [![Tests](https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml/badge.svg)](https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml)
 
-**REMNANT V1 — Stateful Cache–Authorization Consistency Testing Framework**
+**REMNANT V2 — Stateful Cache–Authorization Consistency Testing Framework**
 
-REMNANT runs a controlled experiment that checks whether a protected response can still be served from Redis after the protected origin revokes access. It records the observed steps in SQLite and can produce JSON and standalone HTML reports.
+REMNANT runs a controlled experiment that checks whether a protected response can still be served from Redis after the protected origin revokes access. V2 adds an origin-adapter boundary, explicit cache-observation states, schema-versioned cache metadata, differential response analysis, transactional SQLite analysis evidence, and JSON/standalone HTML reporting. The original three-condition finding oracle and legacy result/report fields are retained.
 
 ## The problem
 
@@ -21,7 +21,8 @@ For each run, REMNANT:
 3. Revokes the grant without deleting the cache entry.
 4. Bypasses Redis and asks the origin again, which independently checks the current policy.
 5. Makes another normal cache-enabled request and compares the response canary with the resource's expected canary.
-6. Evaluates the finding oracle and returns a structured result. The optional evidence store persists completed results and their six evidence stages; the report generator reads that stored evidence.
+6. Evaluates the unchanged finding oracle and performs supporting differential analysis across status, selected headers, body digest, and canary.
+7. Returns a structured result with body-free analysis evidence. The optional SQLite store persists the experiment summary, six legacy evidence stages, finding and V2 analysis in a transaction. JSON schema 2.0 and HTML reports expose the additional analysis; legacy records remain reportable as schema 1.0.
 
 ### Finding oracle
 
@@ -31,18 +32,18 @@ A finding is `CONFIRMED` only when all three conditions hold:
 origin denies AND cache HIT AND canary matches
 ```
 
-Specifically, the cache-bypassed origin must return HTTP 403, the ordinary cache path must return `HIT`, and the cached response body must contain the expected resource canary. A cache hit on its own does not establish an authorization inconsistency.
+Specifically, the cache-bypassed origin must return HTTP 403, the ordinary cache path must return `HIT`, and the cached response body must contain the expected resource canary. A cache hit on its own does not establish an authorization inconsistency. Differential analysis is supporting evidence and does not change this oracle.
 
 ## Architecture
 
-The system components and experiment sequence are documented in [Architecture](docs/architecture.md). Assumptions and security boundaries are in [Security and limitations](docs/security-and-limitations.md).
+The system components and experiment sequence are documented in [Architecture](docs/architecture.md). The separately selectable tenant-aware V2 replay path is described in [V2 tenant-aware experiment](docs/v2-tenant-aware-experiment.md). Assumptions and security boundaries are in [Security and limitations](docs/security-and-limitations.md).
 
 ## Technology
 
 - Python 3.12 or newer
-- FastAPI and HTTPX for the protected origin and in-process ASGI requests
+- FastAPI and HTTPX for the protected origin; an `OriginAdapter` boundary with an in-process ASGI implementation by default
 - Redis 7 (Docker Compose configuration) for cached HTTP response snapshots
-- SQLite via Python's built-in `sqlite3` module for evidence persistence
+- SQLite via Python's built-in `sqlite3` module for versioned, transactional evidence and analysis persistence
 - pytest for unit and Redis integration tests
 
 ## Project structure
@@ -239,6 +240,9 @@ PY
 - The experiment uses in-process ASGI requests for the origin; it does not test a separately deployed web service, reverse proxy, browser, or production cache topology.
 - The cache manager tests Redis response snapshot storage and retrieval. They do not model every cache product, HTTP caching directive, invalidation mechanism, or application-specific cache key.
 - Redis, SQLite, and report destinations are configured by the caller. There is no packaged CLI, orchestration service, or production deployment configuration.
+- Cache observation outcomes distinguish `HIT`, `MISS`, `EXPIRED`, `UNKNOWN`, `BACKEND_ERROR`, and `INVALID_METADATA`; these are observations of this harness, not universal cache semantics.
+- Analysis evidence stores metadata summaries, hashes, statuses and comparison states, not response bodies or full cache keys.
+- The default origin remains an in-process ASGI app. Supplying another adapter changes the transport boundary, but does not by itself make REMNANT a scanner for arbitrary deployed services.
 - A `NOT_FOUND` result means this run did not satisfy the three oracle conditions. It is not proof that the target system has no cache-related authorization flaw.
 
 See [Security and limitations](docs/security-and-limitations.md) for the experiment's security boundaries and assumptions.

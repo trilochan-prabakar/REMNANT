@@ -11,12 +11,14 @@ dependencies = [
     "fastapi",
     "httpx",
     "redis",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
+    "uvicorn>=0.30",
 ]
 
 [tool.setuptools]
