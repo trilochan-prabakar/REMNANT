@@ -137,6 +137,15 @@ class CacheReplayExperiment:
         *,
         ttl_seconds: int = 60,
     ) -> ExperimentResult:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError(
+                "CacheReplayExperiment.run() cannot be called from a running event loop"
+            )
+
         if not principal_id.strip() or not resource_id.strip():
             raise ValueError("principal_id and resource_id must not be empty")
         if resource_id not in app_module.PROTECTED_RESOURCES:
@@ -234,16 +243,10 @@ class CacheReplayExperiment:
 
     def _origin_request(self, principal_id: str, resource_id: str) -> OriginResponse:
         """Call the configured adapter from the synchronous V1 experiment API."""
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(
-                self._origin_adapter.get_protected(
-                    resource_id, principal_id=principal_id
-                )
+        return asyncio.run(
+            self._origin_adapter.get_protected(
+                resource_id, principal_id=principal_id
             )
-        raise RuntimeError(
-            "CacheReplayExperiment.run() cannot be called from a running event loop"
         )
 
     def _cached_request(
