@@ -1,0 +1,36 @@
+schema_version: 1
+
+scenario:
+  id: basic_revocation_test
+  name: Authorization Revocation Replay
+
+tenants:
+  - id: tenant-a
+
+identities:
+  - id: alice
+    tenant: tenant-a
+    roles:
+      - user
+
+resources:
+  - id: document-1
+    tenant: tenant-a
+    owner: alice
+
+steps:
+  - action: grant_permission
+    principal: alice
+    resource: document-1
+
+  - action: prime_cache
+    principal: alice
+    resource: document-1
+
+  - action: revoke_permission
+    principal: alice
+    resource: document-1
+
+  - action: request_cache
+    principal: alice
+    resource: document-1
