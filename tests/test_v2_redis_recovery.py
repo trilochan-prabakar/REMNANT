@@ -98,8 +98,8 @@ def test_initial_read_failure_is_indeterminate_then_independent_run_recovers(
         report = ReportGenerator(store, tmp_path / "reports")
         first_json = report.generate_json(first.experiment_id).read_text()
         recovered_json = report.generate_json(recovered.experiment_id).read_text()
-        assert '"finding_confirmed":false' in first_json
-        assert '"finding_confirmed":true' in recovered_json
+        assert '"finding_confirmed": false' in first_json
+        assert '"finding_confirmed": true' in recovered_json
     finally:
         if first is not None:
             remove_run_key(cache, experiment, first)
