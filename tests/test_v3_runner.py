@@ -76,3 +76,46 @@ steps:
         await client.aclose()
         await proxy.aclose()
     assert result.status is RunStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_run_many_respects_supported_concurrency_and_returns_all_results():
+    client = httpx.AsyncClient(
+        base_url="http://origin.test",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text="ok")),
+    )
+    proxy = httpx.AsyncClient(
+        base_url="http://proxy.test",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text="ok")),
+    )
+    scenario = ScenarioLoader().loads("""
+scenario:
+  id: parallel
+  name: Parallel
+steps:
+  - name: health
+    via: origin
+    path: /health
+    expect_status: 200
+""")
+    try:
+        runner = ScenarioRunner(origin_client=client, proxy_client=proxy)
+        results = await runner.run_many([scenario, scenario, scenario], max_concurrency=2)
+    finally:
+        await client.aclose()
+        await proxy.aclose()
+    assert len(results) == 3
+    assert all(result.status is RunStatus.PASSED for result in results)
+
+
+@pytest.mark.asyncio
+async def test_run_many_rejects_unbounded_concurrency():
+    client = httpx.AsyncClient(base_url="http://origin.test")
+    proxy = httpx.AsyncClient(base_url="http://proxy.test")
+    try:
+        runner = ScenarioRunner(origin_client=client, proxy_client=proxy)
+        with pytest.raises(ValueError, match="max_concurrency"):
+            await runner.run_many([], max_concurrency=1000)
+    finally:
+        await client.aclose()
+        await proxy.aclose()

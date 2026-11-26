@@ -8,7 +8,19 @@ backend default {
     .between_bytes_timeout = 2s;
 }
 
+acl purge {
+    "0.0.0.0"/0;
+}
+
 sub vcl_recv {
+    # This fixture is bound to localhost by Compose; PURGE is enabled only here.
+    if (req.method == "PURGE") {
+        if (client.ip !~ purge) {
+            return (synth(405, "PURGE not allowed"));
+        }
+        return (purge);
+    }
+
     # Test-fixture control operations must never be cached.
     if (req.url ~ "^/control/") {
         return (pass);

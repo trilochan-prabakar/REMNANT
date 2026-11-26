@@ -61,9 +61,19 @@ def main() -> None:
     assert bob_headers.get("X-Cache-Status") == "HIT", bob_headers
     assert json.loads(bob_body)["canary"] == "alice-private-report"
 
+    # Exercise Varnish's explicit PURGE lifecycle operation. The cached object
+    # is removed; Bob's next request reaches the origin and is denied.
+    purge_status, _, _ = request(
+        f"{VARNISH}/protected/report?principal=bob", method="PURGE"
+    )
+    assert purge_status == 200, purge_status
+    after_purge_status, _, _ = request(bob_url)
+    assert after_purge_status == 403, after_purge_status
+
     print("Varnish fixture passed:")
     print("- stale authorization replay: origin 403 / Varnish HIT / expected canary")
     print("- cross-identity cache-key collision: Bob received Alice's cached representation")
+    print("- explicit PURGE invalidation: subsequent request reached origin and returned 403")
 
 
 if __name__ == "__main__":

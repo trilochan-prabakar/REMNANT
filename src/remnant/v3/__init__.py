@@ -4,7 +4,9 @@ from remnant.v3.evidence import RunComparison, StepDifference, V3EvidenceStore
 from remnant.v3.identity_isolation import (
     IdentityIsolationResult, IsolationStatus, evaluate_identity_isolation,
 )
-from remnant.v3.runner import RequestTrace, RunStatus, ScenarioRun, ScenarioRunner
+from remnant.v3.runner import (
+    RequestTrace, RunStatus, ScenarioRun, ScenarioRunner, run_to_dict, run_to_json,
+)
 from remnant.v3.scenarios import (
     RequestStep, ScenarioDefinition, ScenarioFormatError, ScenarioLoader,
 )
@@ -14,6 +16,6 @@ __all__ = [
     "RunComparison", "StepDifference", "V3EvidenceStore",
     "IsolationStatus", "RequestStep", "RequestTrace", "RunStatus",
     "ScenarioDefinition", "ScenarioFormatError", "ScenarioLoader",
-    "ScenarioRun", "ScenarioRunner", "analyze_response",
+    "ScenarioRun", "ScenarioRunner", "analyze_response", "run_to_dict", "run_to_json",
     "evaluate_identity_isolation",
 ]

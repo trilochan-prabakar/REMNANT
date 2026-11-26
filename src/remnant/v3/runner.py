@@ -1,6 +1,7 @@
 """Bounded HTTP scenario runner with redacted, body-free evidence."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -67,7 +68,7 @@ def _redact_path(path: str) -> str:
         if _SENSITIVE_HEADER.search(key):
             value = "[REDACTED]"
         safe_query.append((key, value))
-    return urlunsplit(("", "", parsed.path, urlencode(safe_query), ""))
+    return urlunsplit(("", "", parsed.path, urlencode(safe_query, safe="[]"), ""))
 
 
 def _redact_headers(headers: httpx.Headers) -> tuple[tuple[str, str], ...]:
@@ -110,6 +111,25 @@ class ScenarioRunner:
         self.proxy_client = proxy_client
         self.max_response_bytes = max_response_bytes
         self.timeout_seconds = float(timeout_seconds)
+
+    async def run_many(
+        self, scenarios: tuple[ScenarioDefinition, ...] | list[ScenarioDefinition],
+        *, max_concurrency: int = 4,
+    ) -> tuple[ScenarioRun, ...]:
+        """Run independent scenarios concurrently with a strict worker bound."""
+        if not isinstance(scenarios, (tuple, list)):
+            raise TypeError("scenarios must be a tuple or list")
+        if type(max_concurrency) is not int or not 1 <= max_concurrency <= 16:
+            raise ValueError("max_concurrency must be between 1 and 16")
+        if any(not isinstance(item, ScenarioDefinition) for item in scenarios):
+            raise TypeError("every scenario must be a ScenarioDefinition")
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def guarded(scenario: ScenarioDefinition) -> ScenarioRun:
+            async with semaphore:
+                return await self.run(scenario)
+
+        return tuple(await asyncio.gather(*(guarded(item) for item in scenarios)))
 
     async def run(self, scenario: ScenarioDefinition) -> ScenarioRun:
         if not isinstance(scenario, ScenarioDefinition):
