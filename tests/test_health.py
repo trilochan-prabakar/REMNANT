@@ -2,7 +2,7 @@ import asyncio
 
 import httpx
 
-from remnant.api.app import app
+from remnant.api.app import API_VERSION, app
 
 
 def test_health_endpoint():
@@ -20,5 +20,6 @@ def test_health_endpoint():
     assert response.json() == {
         "status": "healthy",
         "project": "REMNANT",
-        "version": "0.1.0",
+        "version": API_VERSION,
     }
+    assert app.version == API_VERSION == "2.0.0"
