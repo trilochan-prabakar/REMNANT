@@ -44,6 +44,13 @@ class RedisCacheBackendError(RedisCacheError):
     """Raised when Redis itself cannot complete an operation."""
 
 
+def _is_finite_timestamp(value: int | float) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
+
+
 class RedisCacheManager:
     """Store and retrieve response snapshots; never evaluates authorization."""
 
@@ -143,7 +150,8 @@ class RedisCacheManager:
     def observe(self, key: str, *, now: Optional[float] = None) -> CacheObservation:
         """Return an explicit V2 observation without collapsing errors to misses."""
         if now is not None and (
-            type(now) not in (int, float) or (type(now) is float and not math.isfinite(now))
+            type(now) not in (int, float)
+            or not _is_finite_timestamp(now)
         ):
             raise ValueError("now must be a finite numeric Unix timestamp")
 
