@@ -6,6 +6,13 @@ from datetime import datetime, timezone
 import pytest
 
 from remnant.cache.manager import CacheStatus
+from remnant.analysis.models import (
+    CacheMetadataEvidence,
+    ComparisonState,
+    DifferentialComparison,
+    DimensionComparison,
+    ExperimentAnalysisEvidence,
+)
 from remnant.engine.experiment import ExperimentResult
 from remnant.storage import SQLiteEvidenceStore
 
@@ -199,3 +206,132 @@ def test_experiment_timestamps_are_preserved_when_present(tmp_path):
     assert saved["started_at"] == result.started_at
     assert saved["completed_at"] == result.completed_at
     assert {row["timestamp"] for row in saved["evidence"]} == {result.completed_at}
+
+
+
+def make_analysis_evidence():
+    indeterminate = DimensionComparison(ComparisonState.INDETERMINATE)
+    differential = DifferentialComparison(
+        state=ComparisonState.DIFFERENT,
+        status_code=DimensionComparison(ComparisonState.DIFFERENT, 403, 200),
+        selected_headers=indeterminate,
+        body_digest=DimensionComparison(ComparisonState.DIFFERENT, "a" * 64, "b" * 64),
+        canary=DimensionComparison(ComparisonState.MATCH, True, True),
+        compared_headers=("content-type",),
+    )
+    metadata = CacheMetadataEvidence(
+        present=True,
+        valid=True,
+        schema_version=1,
+        principal_id="alice",
+        resource_id="document-1",
+        response_status=200,
+        body_sha256="b" * 64,
+    )
+    return ExperimentAnalysisEvidence(
+        schema_version=1,
+        initial_origin_status=200,
+        cache_prime_observation_status="HIT",
+        cache_prime_metadata=metadata,
+        post_revocation_origin_status=403,
+        replay_observation_status="HIT",
+        replay_metadata=metadata,
+        differential=differential,
+        diagnostic_categories=(),
+    )
+
+
+def test_analysis_evidence_is_saved_and_reloaded_as_additive_row(tmp_path):
+    store = SQLiteEvidenceStore(tmp_path / "analysis.sqlite3")
+    result = replace(make_result(), analysis_evidence=make_analysis_evidence())
+
+    store.save_experiment(result)
+    saved = store.get_experiment(result.experiment_id)
+
+    assert saved["analysis"]["cache_observation_status"] == "HIT"
+    assert saved["analysis"]["differential_state"] == "DIFFERENT"
+    payload = json.loads(saved["analysis"]["analysis_json"])
+    assert payload["replay_metadata"]["valid"] is True
+    assert payload["differential"]["status_code"]["origin_value"] == 403
+    assert len(saved["evidence"]) == 6
+
+
+def test_legacy_result_persists_without_analysis_row(tmp_path):
+    store = SQLiteEvidenceStore(tmp_path / "legacy.sqlite3")
+    result = make_result()
+
+    store.save_experiment(result)
+
+    saved = store.get_experiment(result.experiment_id)
+    assert saved["analysis"] is None
+    assert len(saved["evidence"]) == 6
+
+
+def test_schema_version_is_recorded_and_repeated_initialization_is_idempotent(tmp_path):
+    store = SQLiteEvidenceStore(tmp_path / "versioned.sqlite3")
+
+    store.initialize()
+    store.initialize()
+
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='experiment_analysis'"
+        ).fetchone()[0] == 1
+
+
+def test_existing_legacy_database_is_migrated_without_losing_records(tmp_path):
+    database = tmp_path / "pre-migration.sqlite3"
+    connection = sqlite3.connect(database)
+    from remnant.storage.sqlite import _SCHEMA
+
+    for statement in _SCHEMA.split(";"):
+        if statement.strip():
+            connection.execute(statement)
+    connection.execute(
+        """INSERT INTO experiments
+           (experiment_id, principal_id, resource_id, started_at, completed_at,
+            overall_outcome, finding_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        ("legacy-existing", "alice", "document-1", "2026-01-01T00:00:00+00:00",
+         "2026-01-01T00:00:01+00:00", "COMPLETED", "NOT_FOUND"),
+    )
+    connection.commit()
+    connection.close()
+
+    store = SQLiteEvidenceStore(database)
+    store.initialize()
+
+    assert store.get_experiment("legacy-existing")["analysis"] is None
+    with store._connect() as migrated:
+        assert migrated.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+def test_future_database_schema_version_is_rejected(tmp_path):
+    database = tmp_path / "future.sqlite3"
+    connection = sqlite3.connect(database)
+    connection.execute("PRAGMA user_version = 999")
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(RuntimeError, match="newer than supported"):
+        SQLiteEvidenceStore(database)
+
+
+def test_analysis_insert_failure_rolls_back_entire_experiment_transaction(tmp_path):
+    store = SQLiteEvidenceStore(tmp_path / "rollback-analysis.sqlite3")
+    with store._connect() as connection:
+        connection.execute(
+            """CREATE TRIGGER fail_analysis BEFORE INSERT ON experiment_analysis
+               BEGIN SELECT RAISE(ABORT, 'analysis write failed'); END"""
+        )
+    result = replace(make_result(), analysis_evidence=make_analysis_evidence())
+
+    with pytest.raises(sqlite3.IntegrityError, match="analysis write failed"):
+        store.save_experiment(result)
+
+    with store._connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM experiments").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM experiment_evidence").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM experiment_analysis").fetchone()[0] == 0
