@@ -98,7 +98,9 @@ The following planned V3 capabilities have been implemented on the `v3-developme
 - [x] Isolated real Varnish fixture covering stale replay, cross-principal cache-key collision, resource update staleness, and PURGE invalidation.
 - [x] V3-specific GitHub Actions workflow and tests.
 
-Completion is not declared until the full existing regression suite, the V3-specific suite, and the Varnish integration workflow pass. CI results and any remaining limitations must be recorded before V3 is considered release-ready.
+The validation gate is the CI record below. The current development head has passed
+the listed regression, proxy integration, and compilation checks. V3 remains
+unmerged and is not frozen by this validation.
 
 
 ## Validation record

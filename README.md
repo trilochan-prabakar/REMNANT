@@ -21,7 +21,7 @@ V2 builds on the original experiment with explicit cache-state observations, ver
 
 ## V3 development
 
-The `v3-development` branch adds controlled HTTP scenario execution, HTTP cache directive and freshness analysis, a separate cross-identity isolation oracle, body-free V3 SQLite evidence with run-to-run comparison, and an isolated Varnish 7.6 integration fixture. V3 is additive: V1/V2 implementation files and report contracts remain unchanged. See [V3 usage](docs/v3-usage.md) and [V3 scope](docs/v3-scope.md). The Varnish fixture is intentionally vulnerable and must only be run locally.
+The `v3-development` branch adds controlled HTTP scenario execution, HTTP cache directive and freshness analysis, a separate cross-identity isolation oracle, body-free V3 SQLite evidence with run-to-run comparison, and an isolated Varnish 7.6 integration fixture for authorization replay, resource updates, cross-identity isolation, and cache invalidation. V3 is additive: V1/V2 implementation files and report contracts remain unchanged. See [V3 usage](docs/v3-usage.md) and [V3 scope](docs/v3-scope.md). The Varnish fixture is intentionally vulnerable and must only be run locally.
 
 > **Important scope boundary:** REMNANT is a controlled research and testing harness—not a general-purpose vulnerability scanner or production authorization system. It tests only the principal, resource, origin, cache path, and conditions exercised in a run. A negative result does not prove that a target is free of cache-related authorization flaws.
 
