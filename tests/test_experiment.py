@@ -461,3 +461,28 @@ def test_analysis_evidence_records_safe_metadata_mismatch_category():
     assert "METADATA_IDENTITY_MISMATCH" in evidence.diagnostic_categories
     assert evidence.replay_observation_status == "INVALID_METADATA"
     assert evidence.replay_metadata.valid is False
+
+
+
+def test_legacy_oracle_preserves_hit_when_response_body_is_unavailable():
+    oracle = evaluate_finding(
+        origin_status=403,
+        cache_status=CacheStatus.HIT,
+        response_body=None,
+        expected_canary="expected",
+    )
+
+    assert oracle.origin_denies is True
+    assert oracle.cache_hit is True
+    assert oracle.canary_matches is False
+    assert oracle.finding_confirmed is False
+
+
+@pytest.mark.parametrize("ttl", [0, -1, 1.5, True])
+def test_experiment_rejects_invalid_ttl_before_granting_permission(ttl):
+    experiment, policy, _ = build_experiment()
+
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        experiment.run("alice", "document-1", ttl_seconds=ttl)
+
+    assert policy.is_allowed(Principal("alice", Role.USER), "document-1").allowed is False
