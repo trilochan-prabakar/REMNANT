@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 from redis import Redis
-from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ConnectionError as RedisConnectionError, RedisError
 
 from remnant.cache.manager import RedisCacheManager
 from remnant.engine.experiment import CacheReplayExperiment
@@ -40,9 +40,16 @@ class IntermittentRedis:
 
 @pytest.fixture
 def real_redis_client():
-    client = Redis.from_url("redis://localhost:6379/0")
-    client.ping()
+    client = Redis.from_url(
+        "redis://localhost:6379/0",
+        socket_connect_timeout=1,
+        socket_timeout=1,
+    )
     try:
+        try:
+            client.ping()
+        except RedisError as exc:
+            pytest.skip(f"localhost:6379 Redis is unavailable: {exc}")
         yield client
     finally:
         client.close()
