@@ -36,6 +36,10 @@ class CacheAnalysis:
     directives: tuple[tuple[str, str | None], ...]
     vary: tuple[str, ...]
     age_seconds: int | None
+    freshness_lifetime_seconds: int | None
+    current_age_seconds: int | None
+    freshness_remaining_seconds: int | None
+    is_fresh: bool | None
     has_set_cookie: bool
     request_had_authorization: bool
     shared_cache_may_reuse_authorized_response: bool | None
@@ -69,7 +73,6 @@ def _split_directives(value: str) -> tuple[tuple[str, str | None], ...]:
             current.append(char)
     if current:
         parts.append("".join(current))
-
     parsed: list[tuple[str, str | None]] = []
     for part in parts:
         name, separator, raw_value = part.strip().partition("=")
@@ -107,8 +110,6 @@ def _nonnegative_int(value: str | None) -> int | None:
 def _cache_state(headers: Mapping[str, str]) -> CacheState:
     standard = headers.get("cache-status", "")
     if standard:
-        # RFC 9211 Cache-Status uses key/value parameters, e.g. ExampleCache; hit
-        # and ExampleCache; fwd=uri-miss. Parse each member conservatively.
         for member in standard.lower().split(","):
             tokens = member.replace(";", " ").split()
             if "hit" in tokens:
@@ -119,7 +120,6 @@ def _cache_state(headers: Mapping[str, str]) -> CacheState:
                 return CacheState.BYPASS
             if any(token.startswith("fwd=miss") or token.startswith("fwd=uri-miss") for token in tokens):
                 return CacheState.MISS
-
     for name in ("x-cache", "x-cache-status", "cf-cache-status", "x-proxy-cache"):
         value = headers.get(name, "").lower()
         if not value:
@@ -143,23 +143,32 @@ def analyze_response(
     request_had_authorization: bool = False,
     now: datetime | None = None,
 ) -> CacheAnalysis:
-    """Analyse cache directives and observed cache state.
+    """Analyse cache directives, freshness indicators, and observed cache state.
 
-    RFC 9111 shared-cache restrictions for Authorization requests are reported as
-    diagnostics. A directive is not proof that a particular cache obeyed it.
+    Freshness is an estimate from Date/Age and the response freshness lifetime;
+    it is not a full RFC 9111 age calculation because request/response delay and
+    resident-time measurements are not available at this pure analysis boundary.
     """
     normalized = _headers_lower(headers)
     directives = _split_directives(normalized.get("cache-control", ""))
     directive_map = {name: value for name, value in directives}
     names = set(directive_map)
     reasons: list[str] = []
-    vary = tuple(
-        item.strip().lower()
-        for item in normalized.get("vary", "").split(",")
-        if item.strip()
-    )
+    vary = tuple(item.strip().lower() for item in normalized.get("vary", "").split(",") if item.strip())
     age = _nonnegative_int(normalized.get("age"))
     has_set_cookie = "set-cookie" in normalized
+
+    current = now or datetime.now(timezone.utc)
+    date = _date_value(normalized.get("date"))
+    expires = _date_value(normalized.get("expires"))
+    apparent_age = max(0, int((current - date).total_seconds())) if date else None
+    current_age = max(apparent_age or 0, age or 0) if (apparent_age is not None or age is not None) else None
+
+    shared_lifetime = _nonnegative_int(directive_map.get("s-maxage"))
+    ordinary_lifetime = _nonnegative_int(directive_map.get("max-age"))
+    lifetime = shared_lifetime if shared_lifetime is not None else ordinary_lifetime
+    if lifetime is None and expires is not None:
+        lifetime = max(0, int((expires - (date or current)).total_seconds()))
 
     if "no-store" in names:
         cacheability = Cacheability.NOT_CACHEABLE
@@ -173,43 +182,44 @@ def analyze_response(
     elif "no-cache" in names:
         cacheability = Cacheability.REQUIRES_REVALIDATION
         reasons.append("Cache-Control: no-cache permits storage but requires validation before reuse.")
+    elif lifetime is not None:
+        cacheability = Cacheability.CACHEABLE
+        reasons.append("An explicit freshness lifetime is present.")
     else:
-        shared_lifetime = _nonnegative_int(directive_map.get("s-maxage"))
-        ordinary_lifetime = _nonnegative_int(directive_map.get("max-age"))
-        lifetime = shared_lifetime if shared_lifetime is not None else ordinary_lifetime
-        current = now or datetime.now(timezone.utc)
-        expires = _date_value(normalized.get("expires"))
-        date = _date_value(normalized.get("date"))
-        if lifetime is not None:
-            cacheability = Cacheability.CACHEABLE
-            reasons.append("An explicit max-age or s-maxage freshness lifetime is present.")
-        elif expires is not None and expires > (date or current):
-            cacheability = Cacheability.CACHEABLE
-            reasons.append("Expires declares a future freshness time.")
-        else:
-            cacheability = Cacheability.UNSPECIFIED
-            reasons.append("No explicit freshness lifetime establishes cacheability.")
+        cacheability = Cacheability.UNSPECIFIED
+        reasons.append("No explicit freshness lifetime establishes cacheability.")
+
+    if cacheability is Cacheability.NOT_CACHEABLE:
+        freshness_lifetime = None
+    else:
+        freshness_lifetime = lifetime
+
+    remaining = (
+        max(0, freshness_lifetime - current_age)
+        if freshness_lifetime is not None and current_age is not None else None
+    )
+    is_fresh = (
+        bool(remaining > 0) and "no-cache" not in names
+        if remaining is not None else None
+    )
+    if "no-cache" in names:
+        is_fresh = False
 
     shared_reuse: bool | None = None
     if request_had_authorization:
-        # RFC 9111 §3.5 permits shared-cache reuse of an Authorization response
-        # only under specified response directives. no-store/private still win.
+        # RFC 9111 §3.5: no-store/private still prohibit shared storage even when
+        # another directive (such as public) appears in the same field.
         allowed_directives = {"public", "s-maxage", "must-revalidate"}
         shared_reuse = (
             cacheability not in {Cacheability.NOT_CACHEABLE, Cacheability.PRIVATE_ONLY}
             and bool(names.intersection(allowed_directives))
         )
-        if shared_reuse:
-            reasons.append(
-                "An applicable explicit directive may permit shared-cache reuse for "
-                "an Authorization-bearing request; verify freshness and other RFC conditions."
-            )
-        else:
-            reasons.append(
-                "No applicable directive permits shared-cache reuse of this "
-                "Authorization-bearing response under the observed directives."
-            )
-
+        reasons.append(
+            "An applicable explicit directive may permit shared-cache reuse for an "
+            "Authorization-bearing request; verify freshness and all RFC conditions."
+            if shared_reuse else
+            "No applicable directive permits shared-cache reuse under the observed directives."
+        )
     if has_set_cookie:
         reasons.append("Set-Cookie is present; inspect whether sensitive session material is cached.")
 
@@ -220,6 +230,10 @@ def analyze_response(
         directives=directives,
         vary=vary,
         age_seconds=age,
+        freshness_lifetime_seconds=freshness_lifetime,
+        current_age_seconds=current_age,
+        freshness_remaining_seconds=remaining,
+        is_fresh=is_fresh,
         has_set_cookie=has_set_cookie,
         request_had_authorization=bool(request_had_authorization),
         shared_cache_may_reuse_authorized_response=shared_reuse,
