@@ -18,7 +18,7 @@ A cache `HIT` alone is not a finding: it says only that a response snapshot exis
 - The policy and the experiment use the same `AuthorizationPolicy` instance. The standard setup creates an isolated policy; when a custom origin is supplied, the engine uses its app-state policy or validates an explicitly supplied policy against it.
 - The policy is a mutable, in-memory set of principal/resource grants. Revocation changes subsequent origin decisions immediately in this process.
 - The sample origin has two fixed resources with stable canaries. The test route creates every request principal as `Role.USER`.
-- The cache keys are scoped by a unique experiment ID, principal ID, and resource ID. This prevents the experiment runner's runs and tested identity/resource pairs from sharing a response key.
+- The cache keys are scoped by a unique experiment ID, principal ID, and resource ID; the V2 policy-engine path also includes the tenant resolved from the identity registry. This prevents separate runs and tested identity/resource/tenant contexts from sharing a response key.
 - Cached responses have a finite TTL. The experiment does not invalidate the entry on revocation; it remains subject to normal expiry.
 - Redis is expected at the configured URL (the integration setup uses `redis://localhost:6379/0`). Unit tests use controlled fakes implementing the small Redis client interface.
 - V2 cache observations distinguish HIT, MISS, EXPIRED, UNKNOWN, BACKEND_ERROR, and INVALID_METADATA. These states describe the experiment's adapter observations; they do not model every cache platform's semantics.
@@ -43,13 +43,13 @@ The origin is called directly after revocation, bypassing the Redis lookup. It c
 
 The V2 `PolicyEngine` is a standalone authorization foundation backed by identity, tenant, resource, and permission registries. It provides default-deny decisions, tenant-boundary checks, explicit-deny precedence, ownership rules, and tenant-scoped administrator permissions.
 
-The current `CacheReplayExperiment` still runs the V1-compatible `AuthorizationPolicy` grant/revoke model for its origin sequence. The V2 `PolicyEngine` is not yet wired into that replay pipeline, and the current end-to-end experiment therefore does not demonstrate tenant-aware authorization or tenant-isolated cache replay. The presence of the V2 policy classes and their unit tests must not be presented as proof that the integrated experiment enforces those V2 rules. End-to-end policy and tenant integration is deferred to a separately designed phase.
+The default `CacheReplayExperiment` path still uses the V1-compatible `AuthorizationPolicy`. A separately selectable V2 path composes `PolicyEngineAdapter` with `create_v2_protected_origin_app`. In that path, tenant context is resolved from the trusted `IdentityRegistry`, resource ownership from `ResourceRegistry`, and grants/revocations from `PermissionStore`; no caller-supplied tenant parameter is used as authorization context. Cache keys and metadata include the registry-derived tenant and replay checks require principal, resource, and tenant identity to match. Tests exercise same-tenant replay, cross-tenant denial, tenant-admin boundaries, explicit-deny precedence, inactive tenants, and suspended/removed/unknown identities. This remains an in-memory controlled fixture, not production authentication or identity lifecycle integration.
 
 ## What REMNANT does not test
 
 - It does not scan arbitrary websites, APIs, caches, or source code.
 - It does not detect every cache-related authorization vulnerability or prove that an untested system is secure.
-- It does not test real browser or proxy caches, CDN behavior, HTTP cache directives, distributed invalidation, concurrency races, or production service boundaries.
+- It does not test real browser or proxy caches, CDN behavior, HTTP cache directives, distributed invalidation, or production service boundaries. Bounded concurrency tests exercise independent experiment runs and atomic replacement of a serialized Redis value, not distributed linearizability.
 - It does not test authentication, identity federation, real user/tenant lifecycle, roles submitted by clients, or persistent policy changes.
 - It does not test policies beyond the small grant/revoke model, nor enumerate arbitrary resource identifiers.
 - It does not automatically discover endpoints or cache keys. The experiment targets the fixed protected resources and cache flow implemented in REMNANT.
@@ -75,3 +75,8 @@ The synchronous experiment API currently treats origin transport failures differ
 - V2 JSON reports use schema `2.0` when analysis is present; legacy records remain reportable with schema `1.0` and an explicit missing-analysis state.
 
 Use the framework only against systems and data you are authorized to test. The included demonstration is self-contained and targets the included sample origin.
+
+
+## Concurrency boundaries
+
+The concurrency suite uses independent experiment and policy instances with a shared Redis client. It verifies unique run keys and principal/resource/tenant metadata isolation. For a deliberately shared key, Redis SET atomically replaces the one serialized response-plus-metadata value; concurrent writers may overwrite one another, and REMNANT does not claim which writer wins, a multi-command transaction, or end-to-end linearizability. Sharing one mutable policy object between concurrent experiments is outside the supported guarantee.
