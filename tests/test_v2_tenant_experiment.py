@@ -87,6 +87,25 @@ def test_v2_tenant_path_uses_registry_tenant_in_cache_key_and_metadata(tmp_path)
     assert "tenant-a" not in report["experiment"].get("cache_key", "")
 
 
+def test_v2_origin_serves_resources_registered_outside_v1_sample_catalogue():
+    engine, _, resources, _, _ = build_engine()
+    resources.register(Resource("customer-export-42", "tenant-a", "owner-a"))
+    experiment = build_experiment(engine)
+
+    result = experiment.run("alice", "customer-export-42")
+
+    assert result.initial_authorization_status == 200
+    assert result.cache_primed is True
+    assert result.permission_revoked is True
+    assert result.origin_status_after_revocation == 403
+    assert result.oracle_cache_hit is True
+    assert result.oracle_canary_matches is True
+    assert result.finding_status == "CONFIRMED"
+    assert result.cached_canary.endswith(
+        __import__("hashlib").sha256(b"customer-export-42").hexdigest()[:8]
+    )
+
+
 def test_tenant_a_cannot_prime_or_replay_tenant_b_resource():
     engine, *_ = build_engine()
     experiment = build_experiment(engine)
