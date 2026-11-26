@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Tasks 1 and 2 complete; Task 3 is next.
+ > **Status:** Tasks 1–5 implementation complete; consolidated local validation and final review pending.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -41,36 +41,36 @@
 
 ## Task 3 — Concurrent isolation and race behavior
 
-- [ ] Run bounded simultaneous experiments against shared Redis.
-- [ ] Cover same principal/resource, different principals, and different resources.
-- [ ] Assert unique experiment IDs/cache keys and correct metadata identity.
-- [ ] Verify no cross-run cache consumption or cross-run finding.
-- [ ] Test concurrent store/observe on a deliberately shared key.
-- [ ] State exactly which guarantees come from Redis atomic SET; avoid unsupported linearizability claims.
-- [ ] Document shared mutable policy limitations if observed.
+- [x] Run bounded simultaneous experiments against shared Redis using separate experiment/policy instances.
+- [x] Cover same principal/resource, different principals, and different resources.
+- [x] Assert unique experiment IDs/cache keys and correct metadata identity.
+- [x] Verify no cross-run cache consumption or cross-run finding.
+- [x] Test concurrent store/observe on a deliberately shared key; assert response and metadata remain paired.
+- [x] State exactly which guarantees come from Redis atomic SET; avoid unsupported linearizability claims.
+- [x] Document that shared mutable policy objects are outside the concurrency guarantee.
 
-**Exit:** deterministic bounded concurrency tests pass repeatedly without cross-run contamination.
+**Exit:** implemented; GitHub Actions has passed the initial concurrency suite (201 total tests). The final expanded suite will be rerun after the tenant evidence/report regression addition. Local WSL verification is pending.
 
 ## Task 4 — V2 PolicyEngine end-to-end tenant path
 
-- [ ] Finalize additive policy adapter/controller seam before implementation.
-- [ ] Resolve tenant context from IdentityRegistry, never a caller-supplied tenant field.
-- [ ] Resolve resource tenant/owner from ResourceRegistry.
-- [ ] Integrate PolicyEngine and PermissionStore grant/revoke behavior.
-- [ ] Include trusted tenant context in cache key and metadata.
-- [ ] Test tenant A cannot access tenant B's resource via origin or cache.
-- [ ] Test tenant-admin boundary, explicit deny, inactive tenant, suspended/removed identity, and unknown resource.
-- [ ] Preserve the existing V1 default experiment path and public API.
+- [x] Finalize additive PolicyEngineAdapter seam without changing the V1 default path.
+- [x] Resolve tenant context from IdentityRegistry; caller-supplied tenant data is not used.
+- [x] Resolve resource tenant/owner from ResourceRegistry through PolicyEngine.
+- [x] Integrate PolicyEngine and PermissionStore grant/revoke behavior.
+- [x] Include trusted tenant context in cache key and metadata.
+- [x] Test cross-tenant access is denied before cache priming/replay.
+- [x] Test tenant-admin boundary, explicit-deny precedence, inactive tenant, suspended/removed/unknown identity, unknown tenant, and unknown resource.
+- [x] Preserve the existing V1 default experiment path and public API.
 
-**Exit:** tenant-isolation scenarios pass through origin, cache, evidence persistence, and reports.
+**Exit:** tenant-isolation scenarios and SQLite/JSON evidence persistence are implemented; consolidated validation pending.
 
 ## Task 5 — Evidence, reporting, and documentation
 
-- [ ] Add only safe, necessary tenant/failure evidence.
-- [ ] Keep bodies, secrets, arbitrary headers, and full cache keys out of persistence/reports.
-- [ ] Distinguish NOT_FOUND from indeterminate backend failure.
-- [ ] Add transactional/idempotent migration only if the approved evidence schema requires it.
-- [ ] Update architecture, security limitations, README, and Phase 4 completion record.
+- [x] Add safe tenant context to existing allow-listed cache metadata evidence; no schema migration was needed.
+- [x] Keep bodies, secrets, arbitrary headers, and full cache keys out of persistence/reports.
+- [x] Preserve existing NOT_FOUND vs BACKEND_ERROR observation distinction and oracle behaviour.
+- [x] No migration required: existing analysis JSON schema already supports optional tenant_id.
+- [x] Update architecture, security limitations, README, and tenant-aware experiment documentation.
 
 **Exit:** V1 and V2 report/storage compatibility tests pass; limitations match implemented behavior.
 
