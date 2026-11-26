@@ -334,14 +334,14 @@ class ReportGenerator:
             )
             metadata_rows = "".join(
                 "<tr>"
-                f"<td>{escape(label)}</td>"
+                f"<td>{escape(source + ' — ' + field_label)}</td>"
                 f"<td>{cls._display(metadata.get(field))}</td>"
                 "</tr>"
-                for label, metadata in (
+                for source, metadata in (
                     ("Cache prime", analysis.get("cache_prime_metadata", {})),
                     ("Cache replay", analysis.get("replay_metadata", {})),
                 )
-                for field, label in (
+                for field, field_label in (
                     ("present", "Metadata present"),
                     ("valid", "Metadata valid"),
                     ("schema_version", "Metadata schema"),
