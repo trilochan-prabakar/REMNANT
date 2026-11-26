@@ -7,6 +7,10 @@ import time
 
 import pytest
 import uvicorn
+from redis import Redis
+
+from remnant.cache.manager import RedisCacheManager
+from remnant.engine.experiment import CacheReplayExperiment
 
 from remnant.api.app import create_protected_origin_app
 from remnant.auth.policy import AuthorizationPolicy
@@ -140,3 +144,34 @@ def test_loopback_adapter_wraps_connection_failure_as_transport_error():
 
     with pytest.raises(OriginTransportError, match="loopback origin request failed"):
         request(adapter)
+
+
+def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
+    policy, base_url = live_origin
+    policy.grant("alice", "document-1")
+    cache = RedisCacheManager(
+        redis_url="redis://localhost:6379/0",
+        key_prefix=f"remnant:phase4-loopback:{__import__('uuid').uuid4().hex}:",
+    )
+    experiment = CacheReplayExperiment(
+        cache=cache,
+        policy=policy,
+        origin_adapter=LoopbackHTTPOriginAdapter(base_url),
+    )
+
+    try:
+        Redis.from_url("redis://localhost:6379/0").ping()
+        result = experiment.run("alice", "document-1")
+        assert result.finding_status == "CONFIRMED"
+        assert result.origin_status_after_revocation == 403
+        assert result.cache_observation_status == "HIT"
+        assert result.oracle_origin_denies is True
+        assert result.oracle_cache_hit is True
+        assert result.oracle_canary_matches is True
+    finally:
+        if "result" in locals():
+            cache.delete(
+                experiment._cache_key(
+                    result.experiment_id, "alice", "document-1"
+                )
+            )
