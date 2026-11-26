@@ -95,7 +95,11 @@ class ScenarioLoader:
             scenario_id=ScenarioLoader._required_field(scenario_data, "id", "scenario"),
             name=ScenarioLoader._required_field(scenario_data, "name", "scenario"),
             schema_version=scenario_data.get("schema_version", data.get("schema_version", 1)),
-            tenants=tuple(item["id"] if isinstance(item, dict) else item for item in tenants_data),
+            tenants=tuple(
+                ScenarioLoader._required_field(item, "id", "tenant")
+                if isinstance(item, dict) else item
+                for item in tenants_data
+            ),
             identities=identities,
             resources=resources,
             steps=steps,
