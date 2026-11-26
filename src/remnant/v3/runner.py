@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import re
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -14,7 +15,7 @@ from uuid import uuid4
 
 import httpx
 
-from remnant.v3.cache_analysis import CacheAnalysis, analyze_response
+from remnant.v3.cache_analysis import analyze_response
 from remnant.v3.scenarios import ControlStep, RequestStep, ScenarioDefinition
 
 
@@ -52,7 +53,10 @@ class ScenarioRun:
     traces: tuple[RequestTrace, ...]
 
 
-_SENSITIVE_HEADER = re.compile(r"authorization|cookie|token|secret|api[-_]key|session", re.I)
+_SENSITIVE_HEADER = re.compile(
+    r"authorization|cookie|token|secret|(?:^|[-_])key(?:$|[-_])|session|password|credential",
+    re.I,
+)
 _SAFE_RESPONSE_HEADERS = {
     "cache-control", "expires", "date", "age", "vary", "cache-status",
     "x-cache", "x-cache-status", "cf-cache-status", "x-proxy-cache",
@@ -101,7 +105,7 @@ class ScenarioRunner:
     ) -> None:
         if type(max_response_bytes) is not int or not 1 <= max_response_bytes <= 10_485_760:
             raise ValueError("max_response_bytes must be between 1 and 10 MiB")
-        if not isinstance(timeout_seconds, (int, float)) or not 0.1 <= timeout_seconds <= 60:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not 0.1 <= timeout_seconds <= 60:
             raise ValueError("timeout_seconds must be between 0.1 and 60")
         for label, client in (("origin_client", origin_client), ("proxy_client", proxy_client)):
             if not isinstance(client, httpx.AsyncClient):
@@ -206,7 +210,7 @@ class ScenarioRunner:
         else:  # Defensive guard for manually constructed dataclasses.
             raise ValueError(f"unsupported control operation: {step.operation}")
 
-        started = datetime.now(timezone.utc)
+        started = time.perf_counter()
         async with client.stream(
             method, path, json=payload if payload is not None else None,
             timeout=self.timeout_seconds, follow_redirects=False,
@@ -226,7 +230,7 @@ class ScenarioRunner:
                     truncated = True
                     break
             body = b"".join(chunks)
-            elapsed = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+            elapsed = (time.perf_counter() - started) * 1000
             analysis = analyze_response(response.status_code, dict(response.headers))
             return RequestTrace(
                 step_name=step.name, via=step.via, method=method, path=_redact_path(path),

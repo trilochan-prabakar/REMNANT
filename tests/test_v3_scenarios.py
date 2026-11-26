@@ -45,7 +45,7 @@ def test_rejects_unsupported_method():
 
 def test_rejects_header_injection():
     text = VALID.replace("path: /protected/report", 'path: /protected/report\n    headers:\n      X-Test: "a\\nb"', 1)
-    with pytest.raises(ScenarioFormatError, match="header injection"):
+    with pytest.raises(ScenarioFormatError, match="control characters"):
         ScenarioLoader().loads(text)
 
 
