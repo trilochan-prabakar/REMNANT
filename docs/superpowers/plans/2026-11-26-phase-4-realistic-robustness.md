@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Task 1 complete; Task 2 is next.
+> **Status:** Task 1 complete; Task 2 implementation committed, validation pending.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -29,15 +29,15 @@
 
 ## Task 2 — Redis transient failure and recovery
 
-- [ ] Test read unavailable at prime followed by recovery.
-- [ ] Test prime write failure followed by a successful independent run.
-- [ ] Test replay read failure after a successful prime.
-- [ ] Verify every failed operation remains `BACKEND_ERROR`.
-- [ ] Verify failed prime/replay cannot confirm the finding.
-- [ ] Verify a later recovered run can confirm the controlled replay.
-- [ ] Preserve unrelated Redis keys and use unique prefixes.
+- [x] Test read unavailable at prime followed by recovery using real Redis and a fault-injection proxy.
+- [x] Test prime write failure followed by a successful independent run.
+- [x] Test replay read failure after a successful prime.
+- [x] Assert the failed cache operation is retained as `BACKEND_ERROR` in the corresponding analysis evidence.
+- [x] Assert failed prime/replay cannot confirm the finding.
+- [x] Assert a later recovered run can confirm the controlled replay.
+- [x] Preserve unrelated Redis keys: tests use unique prefixes and delete only their own experiment keys.
 
-**Exit:** end-to-end recovery tests pass through engine, SQLite, and JSON/HTML reporting.
+**Exit:** implementation and tests committed; focused WSL and GitHub Actions validation pending. Initial-read recovery also verifies SQLite persistence and JSON oracle output.
 
 ## Task 3 — Concurrent isolation and race behavior
 
