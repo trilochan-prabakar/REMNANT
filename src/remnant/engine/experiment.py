@@ -175,7 +175,11 @@ class CacheReplayExperiment:
             ttl_seconds=ttl_seconds,
         )
         prime_canary = self._response_canary(prime_response)
-        primed_entry = self._cache.observe(cache_key)
+        primed_entry = (
+            _prime_observation
+            if _prime_observation.status is CacheObservationStatus.BACKEND_ERROR
+            else self._cache.observe(cache_key)
+        )
         cache_primed = (
             prime_status is CacheStatus.MISS
             and prime_response is not None
