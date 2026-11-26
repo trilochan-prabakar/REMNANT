@@ -143,7 +143,7 @@ class RedisCacheManager:
     def observe(self, key: str, *, now: Optional[float] = None) -> CacheObservation:
         """Return an explicit V2 observation without collapsing errors to misses."""
         if now is not None and (
-            type(now) not in (int, float) or not math.isfinite(now)
+            type(now) not in (int, float) or (type(now) is float and not math.isfinite(now))
         ):
             raise ValueError("now must be a finite numeric Unix timestamp")
 
