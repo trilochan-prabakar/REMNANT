@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
- > **Status:** Tasks 1–5 implementation complete; consolidated local validation and final review pending.
+> **Status:** Tasks 1–5 complete; CI and code review complete; consolidated local WSL verification pending.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -49,7 +49,7 @@
 - [x] State exactly which guarantees come from Redis atomic SET; avoid unsupported linearizability claims.
 - [x] Document that shared mutable policy objects are outside the concurrency guarantee.
 
-**Exit:** implemented; GitHub Actions has passed the initial concurrency suite (201 total tests). The final expanded suite will be rerun after the tenant evidence/report regression addition. Local WSL verification is pending.
+**Exit:** implementation and regression coverage complete. Final PR-head GitHub Actions run 45814641214 passed 201 tests; consolidated local WSL verification is pending.
 
 ## Task 4 — V2 PolicyEngine end-to-end tenant path
 
@@ -76,11 +76,11 @@
 
 ## Task 6 — Full validation and review
 
-- [ ] Run focused tests after each task.
-- [ ] Run the complete WSL suite after all Phase 4 tasks; record user-reported output.
-- [ ] Run GitHub Actions after all Phase 4 tasks on Python 3.12 / Redis 7.
-- [ ] Repeat service-boundary and concurrency tests to check determinism.
-- [ ] Review changed files, security boundaries, and regressions.
-- [ ] Confirm PR #1 remains Draft and main is untouched.
+- [x] Add focused tests for the implemented tasks; focused execution is covered by the consolidated CI suite.
+- [ ] Run the complete WSL suite after all Phase 4 tasks; record user-reported output (pending).
+- [x] Run GitHub Actions after all Phase 4 tasks on Python 3.12 / Redis 7 (run 45814641214: 201 passed in 3.29s).
+- [x] Include bounded service-boundary and concurrency tests in the final full CI suite.
+- [x] Review changed implementation, security boundaries, failure semantics, compatibility, and PR scope.
+- [x] Confirm PR #1 remains open and Draft, based on main; branch comparison is ahead 101 / behind 0 and no main changes were made.
 
-**Completion gate:** all Phase 4 acceptance criteria in the spec are met; local and CI results are recorded independently.
+**Completion gate:** implementation and CI criteria are met. Phase 4 is awaiting one consolidated local WSL full-suite run before it can be marked fully validated.
