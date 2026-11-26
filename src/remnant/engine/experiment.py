@@ -17,6 +17,7 @@ from remnant.auth.policy import AuthorizationPolicy
 from remnant.cache.manager import (
     CacheStatus,
     CachedHTTPResponse,
+    RedisCacheBackendError,
     RedisCacheManager,
 )
 from remnant.cache.models import CacheObservation, CacheObservationStatus
@@ -365,12 +366,26 @@ class CacheReplayExperiment:
                 body=snapshot.body,
                 ttl_seconds=ttl_seconds,
             )
-            self._cache.store(
-                cache_key,
-                snapshot,
-                ttl_seconds=ttl_seconds,
-                metadata=metadata,
-            )
+            try:
+                self._cache.store(
+                    cache_key,
+                    snapshot,
+                    ttl_seconds=ttl_seconds,
+                    metadata=metadata,
+                )
+            except RedisCacheBackendError as exc:
+                # A failed write is an explicit backend failure, never a
+                # successful prime or an ordinary cache miss. Preserve the
+                # authorized origin snapshot for diagnostics, but do not let
+                # it enter the replay oracle as a cache HIT.
+                return (
+                    CacheStatus.MISS,
+                    snapshot,
+                    CacheObservation(
+                        CacheObservationStatus.BACKEND_ERROR,
+                        diagnostic="cache backend failed while priming response",
+                    ),
+                )
         return CacheStatus.MISS, snapshot, CacheObservation(CacheObservationStatus.MISS)
 
     @staticmethod
