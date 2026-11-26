@@ -19,8 +19,12 @@ class LoopbackHTTPOriginAdapter:
     """
 
     def __init__(self, base_url: str, *, timeout_seconds: float = 2.0) -> None:
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds)
-            or timeout_seconds <= 0:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
             raise ValueError("timeout_seconds must be a positive number")
         try:
             parsed = urlsplit(base_url)
