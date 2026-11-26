@@ -113,6 +113,7 @@ class CacheReplayExperiment:
         origin_adapter: Optional[OriginAdapter] = None,
     ) -> None:
         self._cache = cache
+        self._active_runner: Optional[asyncio.Runner] = None
         if origin_adapter is not None and origin_app is not None:
             raise ValueError("provide origin_adapter or origin_app, not both")
 
@@ -143,6 +144,12 @@ class CacheReplayExperiment:
         *,
         ttl_seconds: int = 60,
     ) -> ExperimentResult:
+        """Run the synchronous experiment on one event loop.
+
+        All async origin-adapter calls within a run share one loop. The loop
+        is closed when the run finishes, so adapters must not retain loop-bound
+        resources for reuse across separate calls to run().
+        """
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -152,6 +159,24 @@ class CacheReplayExperiment:
                 "CacheReplayExperiment.run() cannot be called from a running event loop"
             )
 
+        if self._active_runner is not None:
+            raise RuntimeError("this experiment is already running")
+        with asyncio.Runner() as runner:
+            self._active_runner = runner
+            try:
+                return self._run_with_runner(
+                    principal_id, resource_id, ttl_seconds=ttl_seconds
+                )
+            finally:
+                self._active_runner = None
+
+    def _run_with_runner(
+        self,
+        principal_id: str,
+        resource_id: str,
+        *,
+        ttl_seconds: int,
+    ) -> ExperimentResult:
         if not principal_id.strip() or not resource_id.strip():
             raise ValueError("principal_id and resource_id must not be empty")
         if resource_id not in app_module.PROTECTED_RESOURCES:
@@ -321,7 +346,9 @@ class CacheReplayExperiment:
 
     def _origin_request(self, principal_id: str, resource_id: str) -> OriginResponse:
         """Call the configured adapter from the synchronous V1 experiment API."""
-        return asyncio.run(
+        if self._active_runner is None:
+            raise RuntimeError("origin requests must run inside CacheReplayExperiment.run()")
+        return self._active_runner.run(
             self._origin_adapter.get_protected(
                 resource_id, principal_id=principal_id
             )
