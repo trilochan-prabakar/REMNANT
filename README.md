@@ -9,14 +9,17 @@
   <a href="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml"><img src="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/Redis-7-DC382D" alt="Redis 7">
-  <img src="https://img.shields.io/badge/Version-V2-16A6A1" alt="REMNANT V2">
+  <a href="https://github.com/trilochan-prabakar/REMNANT/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-16A6A1" alt="Release v2.0.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
 
-REMNANT tests a specific security failure mode: an origin denies a principal after permission revocation, while a normal cache path may still serve the response that principal was previously authorized to receive.
+REMNANT is a Python security-testing framework for one focused question: **after a user's access is revoked, can the normal cache path still return a protected response that the origin now denies?**
 
-V2 preserves the original finding oracle and legacy result/report compatibility while adding explicit cache observations, versioned metadata, differential response analysis, tenant-aware authorization experiments, transactional evidence persistence, and JSON/standalone HTML reports.
+It runs a controlled grant → cache → revoke → replay experiment against a sample protected origin and Redis. A finding is confirmed only when the origin returns HTTP 403, the normal cache path reports a hit, and the cached response contains the expected resource canary.
 
-> **Scope:** REMNANT is a controlled security-testing harness, not a general-purpose website scanner. A result applies only to the principal, resource, origin, cache path, and conditions exercised in that experiment.
+V2 builds on the original experiment with explicit cache-state observations, versioned metadata, differential response diagnostics, a separately selectable tenant-aware policy path, transactional SQLite evidence, and JSON/standalone HTML reports. It preserves the original three-condition finding oracle and legacy result/report compatibility.
+
+> **Important scope boundary:** REMNANT is a controlled research and testing harness—not a general-purpose vulnerability scanner or production authorization system. It tests only the principal, resource, origin, cache path, and conditions exercised in a run. A negative result does not prove that a target is free of cache-related authorization flaws.
 
 ## At a glance
 
@@ -49,6 +52,38 @@ Expected resource canary matches
 ```
 
 Differential response analysis is diagnostic evidence. It does not override or replace this three-condition oracle.
+
+## Architecture
+
+The experiment engine coordinates the authorization policy, protected origin, Redis cache, analysis, and evidence pipeline. The V2 tenant-aware policy is an explicitly selectable path; the legacy V1-compatible policy remains available.
+
+```mermaid
+flowchart LR
+    U[Experiment inputs] --> E[Experiment engine]
+    E --> P[Authorization policy]
+    E --> O[Protected origin adapter]
+    E --> C[Redis cache manager]
+    O --> E
+    C --> E
+    E --> A[Three-condition finding oracle]
+    E --> D[Differential response analysis]
+    A --> S[SQLite evidence store]
+    D --> S
+    S --> R[JSON and HTML reports]
+```
+
+### Interpreting a confirmed result
+
+A confirmed result means the experiment observed all three required facts in the same run:
+
+```text
+origin_status       = 403
+cache_observation   = HIT
+canary_match        = true
+finding_status      = CONFIRMED
+```
+
+If any condition is absent—for example, the cache misses, the origin does not deny access, or the canary does not match—the strict oracle does not confirm a finding. Cache diagnostics and differential comparisons remain useful evidence, but they are not substitutes for the oracle.
 
 ## Experiment flow
 
@@ -219,6 +254,19 @@ Expected observations in the included demonstration:
 
 The generated experiment ID links the result, SQLite record, and both reports. Runtime output is written under `reports/`, which is ignored by Git except for its tracked placeholder.
 
+### Example confirmed outcome
+
+The demonstration should end with the following key result fields (the experiment ID and report paths vary by run):
+
+```text
+Finding: CONFIRMED
+Evidence stages reloaded: 6
+JSON report: reports/generated/<experiment-id>.json
+HTML report: reports/generated/<experiment-id>.html
+```
+
+This is an output-shape example, not a captured terminal recording. The executable demo above is the source of truth for reproducing it.
+
 ## Project layout
 
 ```text
@@ -255,6 +303,8 @@ Read [Security and limitations](docs/security-and-limitations.md) before interpr
 
 ## Project status
 
-**REMNANT V2 is merged into `main`.** The completed V2 implementation was verified with 215 passing tests locally (user-reported WSL run) and 215 passing tests in GitHub Actions on the development branch before merge. The project is a controlled research and testing harness, not a production security product.
+**Current release: [v2.0.0](https://github.com/trilochan-prabakar/REMNANT/releases/tag/v2.0.0).** V2 is complete and merged into `main`. Its test suite was reported as 215 passing locally in WSL and passed 215 tests in GitHub Actions before release.
+
+The next version is intentionally not pre-scoped here. Further development should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
