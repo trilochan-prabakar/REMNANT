@@ -4,6 +4,7 @@ import asyncio
 import socket
 import threading
 import time
+from uuid import uuid4
 
 import pytest
 import uvicorn
@@ -149,9 +150,10 @@ def test_loopback_adapter_wraps_connection_failure_as_transport_error():
 def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
     policy, base_url = live_origin
     policy.grant("alice", "document-1")
+    redis_client = Redis.from_url("redis://localhost:6379/0")
     cache = RedisCacheManager(
-        redis_url="redis://localhost:6379/0",
-        key_prefix=f"remnant:phase4-loopback:{__import__('uuid').uuid4().hex}:",
+        client=redis_client,
+        key_prefix=f"remnant:phase4-loopback:{uuid4().hex}:",
     )
     experiment = CacheReplayExperiment(
         cache=cache,
@@ -160,7 +162,7 @@ def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
     )
 
     try:
-        Redis.from_url("redis://localhost:6379/0").ping()
+        redis_client.ping()
         result = experiment.run("alice", "document-1")
         assert result.finding_status == "CONFIRMED"
         assert result.origin_status_after_revocation == 403
@@ -175,3 +177,4 @@ def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
                     result.experiment_id, "alice", "document-1"
                 )
             )
+        redis_client.close()
