@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
@@ -56,6 +57,17 @@ _SAFE_RESPONSE_HEADERS = {
     "x-cache", "x-cache-status", "cf-cache-status", "x-proxy-cache",
     "content-type", "content-length", "etag", "last-modified", "warning",
 }
+
+
+def _redact_path(path: str) -> str:
+    """Redact secret-like query values before a request path enters evidence."""
+    parsed = urlsplit(path)
+    safe_query = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if _SENSITIVE_HEADER.search(key):
+            value = "[REDACTED]"
+        safe_query.append((key, value))
+    return urlunsplit(("", "", parsed.path, urlencode(safe_query), ""))
 
 
 def _redact_headers(headers: httpx.Headers) -> tuple[tuple[str, str], ...]:
@@ -114,11 +126,11 @@ class ScenarioRunner:
             except (httpx.HTTPError, TimeoutError, OSError) as exc:
                 had_error = True
                 traces.append(RequestTrace(
-                    step_name=step.name, via=step.via, method=step.method, path=step.path,
+                    step_name=step.name, via=step.via, method=step.method, path=_redact_path(step.path),
                     status_code=None, elapsed_ms=None, response_headers=(),
                     body_sha256=None, body_bytes=0, body_truncated=False,
                     cache_analysis=None, assertion_results=(),
-                    error=f"{type(exc).__name__}: {str(exc)[:300]}",
+                    error=f"{type(exc).__name__}: request failed; details omitted to avoid leaking URL data",
                 ))
                 # Stop: later assertions may depend on a response that did not arrive.
                 break
@@ -167,7 +179,7 @@ class ScenarioRunner:
             if step.expected_body_contains is not None:
                 assertions.append(("expected body marker present", step.expected_body_contains in body_text))
             return RequestTrace(
-                step_name=step.name, via=step.via, method=step.method, path=step.path,
+                step_name=step.name, via=step.via, method=step.method, path=_redact_path(step.path),
                 status_code=response.status_code, elapsed_ms=round(elapsed, 3),
                 response_headers=_redact_headers(headers),
                 body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=total,
