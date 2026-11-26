@@ -9,7 +9,7 @@
   <a href="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml"><img src="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/Redis-7-DC382D" alt="Redis 7">
-  <img src="https://img.shields.io/badge/Project_Version-3.0.0-16A6A1" alt="Project version 3.0.0">
+  <a href="https://github.com/trilochan-prabakar/REMNANT/releases/tag/v3.0.0"><img src="https://img.shields.io/badge/Release-v3.0.0-16A6A1" alt="REMNANT v3.0.0 release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
 
@@ -355,7 +355,7 @@ Read [Security and limitations](docs/security-and-limitations.md) before interpr
 
 ## Project status
 
-**Python package version: 3.0.0.** V3 is merged into `main`. GitHub Releases currently include `v1.0.0` and `v2.0.0`; a `v3.0.0` GitHub Release has not been published. V1 and V2 remain supported; V2 implementation files and contracts are frozen. V3 adds the controlled HTTP scenario runner, cache analysis, identity-isolation oracle, V3 evidence persistence, and Varnish integration described in [the V3 documentation](docs/v3-architecture.md).
+**Latest published release: [v3.0.0](https://github.com/trilochan-prabakar/REMNANT/releases/tag/v3.0.0).** V3 is merged into `main` and tagged at the release commit. V1 and V2 remain preserved; V2 implementation files and contracts are frozen. V3 adds the controlled HTTP scenario runner, cache analysis, identity-isolation oracle, V3 evidence persistence, and Varnish integration described in [the V3 documentation](docs/v3-architecture.md).
 
 Future development beyond V3 is intentionally not pre-scoped. Any subsequent major work should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
 
