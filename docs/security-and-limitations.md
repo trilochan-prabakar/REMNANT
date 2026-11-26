@@ -49,6 +49,12 @@ The origin is called directly after revocation, bypassing the Redis lookup. It c
 
 The current origin accepts `principal_id` as a query parameter and constructs a `USER` principal; this is test input, not an authentication mechanism. The in-memory policy and fixed resource data are demonstration fixtures. They must not be treated as a production authorization service or as a source of real confidential data. The canaries are stable identifiers used to determine whether the selected resource's response body was replayed.
 
+## Cache backend failure semantics
+
+A Redis write failure during cache priming is recorded as a `BACKEND_ERROR` observation in the cache-prime evidence. The experiment does not treat the origin response held in process memory as a successful cache write, and that response is never passed to the replay finding oracle as a cache `HIT`. The experiment may continue to the direct post-revocation origin check and replay observation so the result can preserve the backend failure alongside the independent origin outcome. A failed write therefore cannot produce a confirmed cache-replay finding by itself.
+
+The synchronous experiment API currently treats origin transport failures differently: they propagate as exceptions and do not produce a completed experiment result. This distinction is intentional; a cache backend failure is an observation within the tested cache path, while an unavailable origin prevents the required independent authorization observations.
+
 ## Interpreting outcomes
 
 - `CONFIRMED` means the three oracle conditions were observed during this run.
