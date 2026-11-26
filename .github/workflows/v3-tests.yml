@@ -25,3 +25,15 @@ jobs:
         run: python -m pytest -q
       - name: Compile V3 modules
         run: python -m compileall -q src/remnant/v3
+
+  varnish-integration:
+    name: Real Varnish 7.6 integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run isolated Varnish authorization replay and identity collision checks
+        run: |
+          docker compose -f examples/varnish-cache/docker-compose.yml up --build --abort-on-container-exit --exit-code-from check
+      - name: Stop Varnish fixture
+        if: always()
+        run: docker compose -f examples/varnish-cache/docker-compose.yml down -v

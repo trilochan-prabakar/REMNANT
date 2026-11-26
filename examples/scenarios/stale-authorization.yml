@@ -1,0 +1,20 @@
+scenario:
+  schema_version: 1
+  id: stale-authorization-replay
+  name: Stale authorization replay
+  description: Compare a direct origin denial with the normal reverse-proxy cache path.
+
+steps:
+  - name: origin-denies-after-revocation
+    via: origin
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 403
+
+  - name: proxy-returns-cached-representation
+    via: proxy
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 200
+    expect_cache_state: hit
+    expect_body_contains: alice-private-report
