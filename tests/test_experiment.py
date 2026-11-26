@@ -345,3 +345,58 @@ def test_sync_experiment_fails_clearly_inside_running_event_loop():
     assert experiment._policy.is_allowed(
         Principal("alice", Role.USER), "document-1"
     ).allowed is False
+
+
+
+def test_experiment_analysis_evidence_is_serializable_and_body_free():
+    experiment, _, _ = build_experiment()
+    result = experiment.run("alice", "document-1")
+
+    evidence = result.analysis_evidence
+    assert evidence is not None
+    payload = evidence.to_dict()
+    encoded = json.dumps(payload, sort_keys=True)
+
+    assert payload["schema_version"] == 1
+    assert payload["initial_origin_status"] == 200
+    assert payload["cache_prime_observation_status"] == "HIT"
+    assert payload["cache_prime_metadata"]["present"] is True
+    assert payload["cache_prime_metadata"]["valid"] is True
+    assert payload["cache_prime_metadata"]["principal_id"] == "alice"
+    assert payload["cache_prime_metadata"]["resource_id"] == "document-1"
+    assert payload["post_revocation_origin_status"] == 403
+    assert payload["replay_observation_status"] == "HIT"
+    assert payload["replay_metadata"]["valid"] is True
+    assert payload["differential"]["state"] == "DIFFERENT"
+    assert set(payload["differential"]) >= {
+        "status_code", "selected_headers", "body_digest", "canary"
+    }
+    assert "remnant-canary-document-1-7b91c2e4" not in encoded
+    assert "body" not in encoded
+    assert "cache_key" not in encoded
+
+
+def test_analysis_evidence_records_safe_metadata_mismatch_category():
+    experiment, _, _ = build_experiment()
+    original_store = experiment._cache.store
+
+    def store_with_wrong_identity(key, response, *, ttl_seconds, metadata=None):
+        from remnant.cache.metadata import CacheMetadata
+
+        wrong = CacheMetadata.create(
+            principal_id="mallory",
+            resource_id="document-1",
+            response_status=response.status_code,
+            body=response.body,
+            ttl_seconds=ttl_seconds,
+        )
+        return original_store(key, response, ttl_seconds=ttl_seconds, metadata=wrong)
+
+    experiment._cache.store = store_with_wrong_identity
+    result = experiment.run("alice", "document-1")
+
+    evidence = result.analysis_evidence
+    assert evidence is not None
+    assert "METADATA_IDENTITY_MISMATCH" in evidence.diagnostic_categories
+    assert evidence.replay_observation_status == "INVALID_METADATA"
+    assert evidence.replay_metadata.valid is False
