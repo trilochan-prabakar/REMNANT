@@ -285,3 +285,60 @@ def test_unexpected_origin_http_status_does_not_confirm_finding():
     assert oracle.cache_hit is True
     assert oracle.canary_matches is True
     assert oracle.finding_confirmed is False
+
+
+
+class RecordingOriginAdapter:
+    def __init__(self, policy):
+        from remnant.origin.fastapi import FastAPIOriginAdapter
+
+        self._adapter = FastAPIOriginAdapter(create_protected_origin_app(policy))
+        self.calls = []
+
+    async def get_protected(self, resource_id, *, principal_id):
+        self.calls.append((resource_id, principal_id))
+        return await self._adapter.get_protected(
+            resource_id, principal_id=principal_id
+        )
+
+
+def test_experiment_routes_all_origin_requests_through_injected_adapter():
+    policy = AuthorizationPolicy()
+    adapter = RecordingOriginAdapter(policy)
+    cache = RedisCacheManager(client=ExpiringRedis(), key_prefix="adapter:")
+    experiment = CacheReplayExperiment(
+        cache=cache, policy=policy, origin_adapter=adapter
+    )
+
+    result = experiment.run("alice", "document-1")
+
+    assert result.finding_status == "CONFIRMED"
+    assert adapter.calls == [
+        ("document-1", "alice"),
+        ("document-1", "alice"),
+        ("document-1", "alice"),
+    ]
+
+
+def test_experiment_rejects_both_origin_app_and_adapter():
+    policy = AuthorizationPolicy()
+    adapter = RecordingOriginAdapter(policy)
+    with pytest.raises(ValueError, match="origin_adapter or origin_app"):
+        CacheReplayExperiment(
+            cache=RedisCacheManager(client=ExpiringRedis()),
+            policy=policy,
+            origin_app=create_protected_origin_app(policy),
+            origin_adapter=adapter,
+        )
+
+
+def test_sync_experiment_fails_clearly_inside_running_event_loop():
+    import asyncio
+
+    experiment, _, _ = build_experiment()
+
+    async def invoke():
+        with pytest.raises(RuntimeError, match="running event loop"):
+            experiment.run("alice", "document-1")
+
+    asyncio.run(invoke())
