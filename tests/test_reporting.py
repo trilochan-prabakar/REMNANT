@@ -1,9 +1,17 @@
 import json
+from dataclasses import replace
 from html.parser import HTMLParser
 
 import pytest
 
 from remnant.cache.manager import CacheStatus
+from remnant.analysis.models import (
+    CacheMetadataEvidence,
+    ComparisonState,
+    DifferentialComparison,
+    DimensionComparison,
+    ExperimentAnalysisEvidence,
+)
 from remnant.engine.experiment import ExperimentResult
 from remnant.reporting import ExperimentNotFoundError, ReportGenerator
 from remnant.storage import SQLiteEvidenceStore
@@ -217,3 +225,81 @@ def test_malformed_persisted_details_are_tolerated(tmp_path):
 
     report = json.loads(generator.generate_json("experiment-1").read_text())
     assert report["stages"][0]["details"] == {}
+
+
+
+def make_analysis_evidence():
+    unknown = DimensionComparison(ComparisonState.INDETERMINATE)
+    differential = DifferentialComparison(
+        state=ComparisonState.DIFFERENT,
+        status_code=DimensionComparison(ComparisonState.DIFFERENT, 403, 200),
+        selected_headers=unknown,
+        body_digest=DimensionComparison(ComparisonState.DIFFERENT, "a" * 64, "b" * 64),
+        canary=DimensionComparison(ComparisonState.MATCH, True, True),
+        compared_headers=("content-type",),
+    )
+    metadata = CacheMetadataEvidence(
+        present=True,
+        valid=True,
+        schema_version=1,
+        principal_id="alice",
+        resource_id="document-1",
+        response_status=200,
+        body_sha256="b" * 64,
+    )
+    return ExperimentAnalysisEvidence(
+        schema_version=1,
+        initial_origin_status=200,
+        cache_prime_observation_status="HIT",
+        cache_prime_metadata=metadata,
+        post_revocation_origin_status=403,
+        replay_observation_status="HIT",
+        replay_metadata=metadata,
+        differential=differential,
+        diagnostic_categories=("CACHE_HIT",),
+    )
+
+
+def test_v2_json_report_includes_analysis_and_preserves_legacy_stages(tmp_path):
+    result = replace(make_result(), analysis_evidence=make_analysis_evidence())
+    generator, _ = build_generator(tmp_path, result)
+
+    report = json.loads(generator.generate_json("experiment-1").read_text())
+
+    assert report["report_schema_version"] == "2.0"
+    assert report["analysis"]["replay_observation_status"] == "HIT"
+    assert report["analysis"]["differential"]["state"] == "DIFFERENT"
+    assert report["analysis"]["differential"]["status_code"]["origin_value"] == 403
+    assert len(report["stages"]) == 6
+    assert report["oracle"]["finding_confirmed"] is True
+    encoded = json.dumps(report)
+    assert "response_body" not in encoded
+    assert "cache_key" not in encoded
+
+
+def test_v2_html_report_renders_analysis_and_escapes_values(tmp_path):
+    result = replace(make_result(), analysis_evidence=make_analysis_evidence())
+    generator, _ = build_generator(tmp_path, result)
+
+    html = generator.generate_html("experiment-1").read_text()
+
+    assert "V2 analysis evidence" in html
+    assert "Differential dimensions" in html
+    assert "Metadata validation" in html
+    assert "DIFFERENT" in html
+    assert "alice &lt;img" in html
+    assert '<img src=x onerror="alert(1)">' not in html
+    assert "Analysis not recorded" not in html
+    assert "response_body" not in html
+    assert "cache_key" not in html
+
+
+def test_legacy_reports_use_v1_schema_and_explicit_missing_analysis(tmp_path):
+    generator, _ = build_generator(tmp_path)
+
+    report = json.loads(generator.generate_json("experiment-1").read_text())
+    html = generator.generate_html("experiment-1").read_text()
+
+    assert report["report_schema_version"] == "1.0"
+    assert report["analysis"] is None
+    assert "Analysis not recorded for this experiment." in html
