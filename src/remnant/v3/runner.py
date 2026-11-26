@@ -86,8 +86,8 @@ class ScenarioRunner:
     """Execute a scenario using separately configured origin and proxy clients.
 
     Clients are injected by the caller, making target selection explicit. This
-    runner does not crawl, follow redirects, mutate application state, or accept
-    arbitrary URLs from scenario documents.
+    runner does not crawl, follow redirects, or accept arbitrary URLs from
+    scenario documents. State-changing fixture controls require explicit opt-in.
     """
 
     def __init__(
@@ -125,6 +125,8 @@ class ScenarioRunner:
             raise TypeError("scenarios must be a tuple or list")
         if type(max_concurrency) is not int or not 1 <= max_concurrency <= 16:
             raise ValueError("max_concurrency must be between 1 and 16")
+        if len(scenarios) > 100:
+            raise ValueError("at most 100 scenarios may be run in one batch")
         if any(not isinstance(item, ScenarioDefinition) for item in scenarios):
             raise TypeError("every scenario must be a ScenarioDefinition")
         semaphore = asyncio.Semaphore(max_concurrency)
@@ -138,6 +140,8 @@ class ScenarioRunner:
     async def run(self, scenario: ScenarioDefinition) -> ScenarioRun:
         if not isinstance(scenario, ScenarioDefinition):
             raise TypeError("scenario must be a ScenarioDefinition")
+        if any(not isinstance(step, (ControlStep, RequestStep)) for step in scenario.steps):
+            raise TypeError("scenario contains an unsupported step type")
         if any(isinstance(step, ControlStep) for step in scenario.steps) and not self.allow_control_operations:
             raise PermissionError(
                 "scenario contains state-changing control steps; construct the runner "
@@ -150,6 +154,11 @@ class ScenarioRunner:
         had_error = False
         for step in scenario.steps:
             client = self.origin_client if step.via == "origin" else self.proxy_client
+            if isinstance(step, ControlStep):
+                failed_method = "PURGE" if step.operation == "purge" else "POST"
+                failed_path = step.path if step.operation == "purge" else f"/__remnant__/control/{step.operation}"
+            else:
+                failed_method, failed_path = step.method, step.path
             try:
                 trace = (
                     await self._control(step)
@@ -159,7 +168,7 @@ class ScenarioRunner:
             except (httpx.HTTPError, TimeoutError, OSError) as exc:
                 had_error = True
                 traces.append(RequestTrace(
-                    step_name=step.name, via=step.via, method=step.method, path=_redact_path(step.path),
+                    step_name=step.name, via=step.via, method=failed_method, path=_redact_path(failed_path),
                     status_code=None, elapsed_ms=None, response_headers=(),
                     body_sha256=None, body_bytes=0, body_truncated=False,
                     cache_analysis=None, assertion_results=(),
@@ -180,14 +189,19 @@ class ScenarioRunner:
     async def _control(self, step: ControlStep) -> RequestTrace:
         """Execute only the fixed V3 fixture-control endpoints or a proxy PURGE."""
         if step.operation in {"grant", "revoke"}:
+            if step.via != "origin" or not isinstance(step.principal, str) or not step.principal.strip():
+                raise ValueError("grant/revoke controls require origin and a principal")
             client = self.origin_client
             method = "POST"
             path = f"/__remnant__/control/{step.operation}"
             payload = {"principal": step.principal}
         elif step.operation == "purge":
+            if step.via != "proxy" or not isinstance(step.path, str):
+                raise ValueError("purge controls require proxy and a relative path")
+            from remnant.v3.scenarios import ScenarioLoader
+            path = ScenarioLoader._path(step.path, 0)
             client = self.proxy_client
             method = "PURGE"
-            path = step.path
             payload = None
         else:  # Defensive guard for manually constructed dataclasses.
             raise ValueError(f"unsupported control operation: {step.operation}")
@@ -224,9 +238,13 @@ class ScenarioRunner:
             )
 
     async def _request(self, step: RequestStep, client: httpx.AsyncClient) -> RequestTrace:
+        if step.via not in {"origin", "proxy"} or step.method not in {"GET", "HEAD"}:
+            raise ValueError("request step has an unsupported route or method")
+        from remnant.v3.scenarios import ScenarioLoader
+        path = ScenarioLoader._path(step.path, 0)
         started = datetime.now(timezone.utc)
         async with client.stream(
-            step.method, step.path, headers=dict(step.headers),
+            step.method, path, headers=dict(step.headers),
             timeout=self.timeout_seconds, follow_redirects=False,
         ) as response:
             chunks: list[bytes] = []
@@ -259,7 +277,7 @@ class ScenarioRunner:
             if step.expected_body_contains is not None:
                 assertions.append(("expected body marker present", step.expected_body_contains in body_text))
             return RequestTrace(
-                step_name=step.name, via=step.via, method=step.method, path=_redact_path(step.path),
+                step_name=step.name, via=step.via, method=step.method, path=_redact_path(path),
                 status_code=response.status_code, elapsed_ms=round(elapsed, 3),
                 response_headers=_redact_headers(headers),
                 body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=total,

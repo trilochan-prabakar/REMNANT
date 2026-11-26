@@ -115,6 +115,8 @@ class ScenarioLoader:
 
             if kind == "control":
                 operation = item.get("operation")
+                if not isinstance(operation, str):
+                    raise ScenarioFormatError(f"step {index}: operation must be a string")
                 if operation in {"grant", "revoke"}:
                     principal = item.get("principal")
                     if via != "origin" or not isinstance(principal, str) or not principal.strip() or "path" in item:
