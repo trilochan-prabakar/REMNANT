@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -47,7 +48,7 @@ class V3EvidenceStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > self.SCHEMA_VERSION:
                 raise RuntimeError(
@@ -71,12 +72,13 @@ class V3EvidenceStore:
                     PRAGMA user_version = 1;
                     """
                 )
+                connection.commit()
 
     def save(self, run: ScenarioRun) -> None:
         if not isinstance(run, ScenarioRun):
             raise TypeError("run must be a ScenarioRun")
         payload = json.dumps(run_to_dict(run), sort_keys=True, separators=(",", ":"))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
@@ -89,11 +91,12 @@ class V3EvidenceStore:
                     run.completed_at, run.status.value, payload,
                 ),
             )
+            connection.commit()
 
     def get(self, run_id: str) -> dict[str, Any] | None:
         if not isinstance(run_id, str) or not run_id.strip():
             raise ValueError("run_id must be a non-empty string")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute(
                 "SELECT payload_json FROM v3_runs WHERE run_id = ?", (run_id,)
             ).fetchone()
@@ -102,7 +105,7 @@ class V3EvidenceStore:
     def list_runs(self, *, scenario_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("limit must be between 1 and 500")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             if scenario_id is None:
                 rows = connection.execute(
                     "SELECT payload_json FROM v3_runs ORDER BY completed_at DESC LIMIT ?",
