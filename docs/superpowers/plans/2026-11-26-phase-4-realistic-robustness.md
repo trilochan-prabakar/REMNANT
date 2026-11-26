@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Task 1 complete; Task 2 implementation committed, validation pending.
+> **Status:** Tasks 1 and 2 complete; Task 3 is next.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -37,7 +37,7 @@
 - [x] Assert a later recovered run can confirm the controlled replay.
 - [x] Preserve unrelated Redis keys: tests use unique prefixes and delete only their own experiment keys.
 
-**Exit:** implementation and tests committed; focused WSL and GitHub Actions validation pending. Initial-read recovery also verifies SQLite persistence and JSON oracle output.
+**Exit:** complete. User-reported WSL full suite: **191 passed**. GitHub Actions run 45812812842: **191 passed in 2.98s** (Python 3.12 / Redis 7). Initial-read recovery also verifies SQLite persistence and JSON oracle output.
 
 ## Task 3 — Concurrent isolation and race behavior
 
@@ -77,8 +77,8 @@
 ## Task 6 — Full validation and review
 
 - [ ] Run focused tests after each task.
-- [ ] Run the complete WSL suite; record user-reported output.
-- [ ] Run GitHub Actions on Python 3.12 / Redis 7.
+- [ ] Run the complete WSL suite after all Phase 4 tasks; record user-reported output.
+- [ ] Run GitHub Actions after all Phase 4 tasks on Python 3.12 / Redis 7.
 - [ ] Repeat service-boundary and concurrency tests to check determinism.
 - [ ] Review changed files, security boundaries, and regressions.
 - [ ] Confirm PR #1 remains Draft and main is untouched.
