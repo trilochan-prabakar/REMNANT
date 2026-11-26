@@ -8,7 +8,6 @@ from typing import Optional
 from urllib.parse import quote
 from uuid import uuid4
 
-import httpx
 from fastapi import FastAPI
 
 from remnant.api import app as app_module
@@ -24,7 +23,8 @@ from remnant.cache.models import CacheObservation, CacheObservationStatus
 from remnant.cache.metadata import CacheMetadata
 from remnant.analysis import compare_responses
 from remnant.analysis.oracle import evaluate_observation_finding
-from remnant.origin.protocols import OriginResponse
+from remnant.origin.fastapi import FastAPIOriginAdapter
+from remnant.origin.protocols import OriginAdapter, OriginResponse
 
 
 @dataclass(frozen=True)
@@ -104,11 +104,19 @@ class CacheReplayExperiment:
         cache: RedisCacheManager,
         policy: Optional[AuthorizationPolicy] = None,
         origin_app: Optional[FastAPI] = None,
+        origin_adapter: Optional[OriginAdapter] = None,
     ) -> None:
         self._cache = cache
-        if origin_app is None:
+        if origin_adapter is not None and origin_app is not None:
+            raise ValueError("provide origin_adapter or origin_app, not both")
+
+        if origin_adapter is not None:
             self._policy = policy if policy is not None else AuthorizationPolicy()
-            self._origin_app = create_protected_origin_app(self._policy)
+            self._origin_adapter = origin_adapter
+        elif origin_app is None:
+            self._policy = policy if policy is not None else AuthorizationPolicy()
+            origin = create_protected_origin_app(self._policy)
+            self._origin_adapter = FastAPIOriginAdapter(origin)
         else:
             origin_policy = getattr(
                 origin_app.state,
@@ -120,7 +128,7 @@ class CacheReplayExperiment:
                     "experiment and origin must use the same AuthorizationPolicy"
                 )
             self._policy = origin_policy
-            self._origin_app = origin_app
+            self._origin_adapter = FastAPIOriginAdapter(origin_app)
 
     def run(
         self,
@@ -192,8 +200,8 @@ class CacheReplayExperiment:
         )
         origin_snapshot = OriginResponse(
             status_code=bypassed_response.status_code,
-            headers=tuple(bypassed_response.headers.multi_items()),
-            body=bypassed_response.content,
+            headers=bypassed_response.headers,
+            body=bypassed_response.body,
         )
         differential = compare_responses(
             origin_snapshot,
@@ -224,19 +232,19 @@ class CacheReplayExperiment:
             differential_state=differential.state.value,
         )
 
-    def _origin_request(self, principal_id: str, resource_id: str) -> httpx.Response:
-        async def send_request() -> httpx.Response:
-            transport = httpx.ASGITransport(app=self._origin_app)
-            async with httpx.AsyncClient(
-                transport=transport,
-                base_url="http://remnant-origin",
-            ) as client:
-                return await client.get(
-                    f"/protected/{quote(resource_id, safe='')}",
-                    params={"principal_id": principal_id},
+    def _origin_request(self, principal_id: str, resource_id: str) -> OriginResponse:
+        """Call the configured adapter from the synchronous V1 experiment API."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self._origin_adapter.get_protected(
+                    resource_id, principal_id=principal_id
                 )
-
-        return asyncio.run(send_request())
+            )
+        raise RuntimeError(
+            "CacheReplayExperiment.run() cannot be called from a running event loop"
+        )
 
     def _cached_request(
         self,
@@ -270,8 +278,8 @@ class CacheReplayExperiment:
         response = self._origin_request(principal_id, resource_id)
         snapshot = CachedHTTPResponse(
             status_code=response.status_code,
-            headers=tuple(response.headers.multi_items()),
-            body=response.content,
+            headers=response.headers,
+            body=response.body,
         )
         if response.status_code == 200:
             metadata = CacheMetadata.create(
