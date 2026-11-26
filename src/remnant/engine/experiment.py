@@ -20,6 +20,8 @@ from remnant.cache.manager import (
     CachedHTTPResponse,
     RedisCacheManager,
 )
+from remnant.cache.models import CacheObservation, CacheObservationStatus
+from remnant.analysis.oracle import evaluate_observation_finding
 
 
 @dataclass(frozen=True)
@@ -58,24 +60,33 @@ def evaluate_finding(
     response_body: Optional[bytes],
     expected_canary: str,
 ) -> FindingOracle:
-    """Evaluate the exact three-condition REMNANT finding oracle."""
-    origin_denies = origin_status == 403
-    cache_hit = cache_status is CacheStatus.HIT
-    canary_matches = False
-    if cache_hit and response_body is not None:
-        try:
-            cached_data = json.loads(response_body)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            cached_data = None
-        canary_matches = (
-            isinstance(cached_data, dict)
-            and cached_data.get("canary") == expected_canary
+    """Evaluate the exact V1-compatible three-condition finding oracle.
+
+    Legacy inputs are normalized into the V2 observation model while callers
+    retain the original signature and FindingOracle result type.
+    """
+    if cache_status is CacheStatus.HIT and response_body is not None:
+        observation = CacheObservation(
+            CacheObservationStatus.HIT,
+            response=CachedHTTPResponse(200, (), response_body),
         )
+    else:
+        observation = CacheObservation(
+            CacheObservationStatus.MISS
+            if cache_status is CacheStatus.MISS
+            else CacheObservationStatus.UNKNOWN
+        )
+
+    result = evaluate_observation_finding(
+        origin_status=origin_status,
+        observation=observation,
+        expected_canary=expected_canary,
+    )
     return FindingOracle(
-        origin_denies=origin_denies,
-        cache_hit=cache_hit,
-        canary_matches=canary_matches,
-        finding_confirmed=origin_denies and cache_hit and canary_matches,
+        origin_denies=result.origin_denies,
+        cache_hit=result.cache_hit,
+        canary_matches=result.canary_matches,
+        finding_confirmed=result.finding_confirmed,
     )
 
 
