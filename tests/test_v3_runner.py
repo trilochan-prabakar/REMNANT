@@ -33,7 +33,7 @@ steps:
     expect_status: 403
   - name: cached
     via: proxy
-    path: /protected/report
+    path: /protected/report?token=do-not-log
     expect_status: 200
     expect_cache_state: hit
     expect_body_contains: private-report
@@ -47,6 +47,8 @@ steps:
     serialized = run_to_json(result)
     assert "top-secret" not in serialized
     assert "session=" not in serialized
+    assert "do-not-log" not in serialized
+    assert "[REDACTED]" in result.traces[1].path
     assert result.traces[1].cache_analysis["cache_state"].value == "hit"
 
 

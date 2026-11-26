@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from urllib.parse import urlsplit
 
 import yaml
@@ -78,16 +77,18 @@ class ScenarioLoader:
             if not isinstance(name, str) or not name.strip() or name in names:
                 raise ScenarioFormatError(f"step {index} requires a unique non-empty name")
             names.add(name)
-            if via not in {"origin", "proxy"}:
+            if not isinstance(via, str) or via not in {"origin", "proxy"}:
                 raise ScenarioFormatError(f"step {index}: via must be origin or proxy")
-            if method not in {"GET", "HEAD"}:
+            if not isinstance(method, str) or method not in {"GET", "HEAD"}:
                 raise ScenarioFormatError(f"step {index}: only GET and HEAD are supported")
             if not isinstance(path, str) or not path.startswith("/") or path.startswith("//"):
                 raise ScenarioFormatError(f"step {index}: path must be an absolute-path reference")
             parsed = urlsplit(path)
-            if parsed.scheme or parsed.netloc or "\\" in path:
+            if parsed.scheme or parsed.netloc or parsed.fragment or "\\" in path:
                 raise ScenarioFormatError(f"step {index}: absolute URLs and backslashes are forbidden")
-            if any(part in {".", ".."} for part in parsed.path.split("/")):
+            from urllib.parse import unquote
+            decoded_path = unquote(parsed.path)
+            if "\\" in decoded_path or any(part in {".", ".."} for part in decoded_path.split("/")):
                 raise ScenarioFormatError(f"step {index}: path traversal is forbidden")
             headers_raw = item.get("headers", {})
             if not isinstance(headers_raw, dict):
@@ -105,7 +106,9 @@ class ScenarioLoader:
             if status is not None and (type(status) is not int or not 100 <= status <= 599):
                 raise ScenarioFormatError(f"step {index}: expect_status must be an HTTP status")
             cache_state = item.get("expect_cache_state")
-            if cache_state is not None and cache_state not in self.CACHE_STATES:
+            if cache_state is not None and (
+                not isinstance(cache_state, str) or cache_state not in self.CACHE_STATES
+            ):
                 raise ScenarioFormatError(f"step {index}: unsupported expected cache state")
             body_match = item.get("expect_body_contains")
             if body_match is not None and (not isinstance(body_match, str) or not body_match):
