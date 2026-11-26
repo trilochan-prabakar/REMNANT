@@ -2,6 +2,7 @@
 
 import base64
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -141,6 +142,11 @@ class RedisCacheManager:
 
     def observe(self, key: str, *, now: Optional[float] = None) -> CacheObservation:
         """Return an explicit V2 observation without collapsing errors to misses."""
+        if now is not None and (
+            type(now) not in (int, float) or not math.isfinite(now)
+        ):
+            raise ValueError("now must be a finite numeric Unix timestamp")
+
         try:
             result = self.lookup(key)
         except RedisCacheBackendError as exc:
