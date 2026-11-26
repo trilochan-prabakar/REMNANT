@@ -203,39 +203,43 @@ class CacheReplayExperiment:
         tenant_id = tenant_resolver(principal_id) if callable(tenant_resolver) else None
         cache_key = self._cache_key(experiment_id, principal_id, resource_id, tenant_id=tenant_id)
 
-        # A: grant and verify directly against the origin.
+        # A/B: grant only for the authorized origin request and cache prime.
+        # Always revoke in a finally block: an origin, Redis, or adapter failure
+        # during either stage must never leave this temporary grant active.
         self._policy.grant(principal_id, resource_id)
-        initial_response = self._origin_request(principal_id, resource_id)
+        try:
+            initial_response = self._origin_request(principal_id, resource_id)
 
-        # B: use the regular cache path, priming Redis from the authorized origin.
-        prime_status, prime_response, _prime_observation = self._cached_request(
-            principal_id,
-            resource_id,
-            cache_key,
-            ttl_seconds=ttl_seconds,
-            tenant_id=tenant_id,
-        )
-        prime_canary = self._response_canary(prime_response)
-        primed_entry = (
-            _prime_observation
-            if _prime_observation.status is CacheObservationStatus.BACKEND_ERROR
-            else self._cache.observe(cache_key)
-        )
-        cache_primed = (
-            prime_status is CacheStatus.MISS
-            and prime_response is not None
-            and prime_response.status_code == 200
-            and prime_canary == expected_canary
-            and primed_entry.status is CacheObservationStatus.HIT
-            and primed_entry.metadata is not None
-            and primed_entry.metadata.principal_id == principal_id
-            and primed_entry.metadata.resource_id == resource_id
-            and primed_entry.metadata.tenant_id == tenant_id
-            and self._response_canary(primed_entry.response) == expected_canary
-        )
+            # Use the regular cache path, priming Redis from the authorized origin.
+            prime_status, prime_response, _prime_observation = self._cached_request(
+                principal_id,
+                resource_id,
+                cache_key,
+                ttl_seconds=ttl_seconds,
+                tenant_id=tenant_id,
+            )
+            prime_canary = self._response_canary(prime_response)
+            primed_entry = (
+                _prime_observation
+                if _prime_observation.status is CacheObservationStatus.BACKEND_ERROR
+                else self._cache.observe(cache_key)
+            )
+            cache_primed = (
+                prime_status is CacheStatus.MISS
+                and prime_response is not None
+                and prime_response.status_code == 200
+                and prime_canary == expected_canary
+                and primed_entry.status is CacheObservationStatus.HIT
+                and primed_entry.metadata is not None
+                and primed_entry.metadata.principal_id == principal_id
+                and primed_entry.metadata.resource_id == resource_id
+                and primed_entry.metadata.tenant_id == tenant_id
+                and self._response_canary(primed_entry.response) == expected_canary
+            )
+        finally:
+            self._policy.revoke(principal_id, resource_id)
 
-        # C: revoke authorization only; leave the cache entry and its TTL intact.
-        self._policy.revoke(principal_id, resource_id)
+        # C: authorization is revoked; leave the cache entry and its TTL intact.
         permission_revoked = not self._policy.is_allowed(principal, resource_id).allowed
 
         # D: bypass the cache and verify the origin's independent decision.
