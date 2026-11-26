@@ -1,17 +1,17 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Tasks 1–5 complete; CI and code review complete; consolidated local WSL verification pending.
+> **Status:** COMPLETE — all six tasks implemented, CI passed, and consolidated local WSL validation passed (201 tests).
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
 ## Global guardrails
 
-- [ ] Work only on `remnant-v2-development`.
-- [ ] Keep PR #1 open and Draft; do not merge or mark ready.
-- [ ] Do not modify `main`.
-- [ ] Preserve V1-compatible constructors, runner, finding oracle, evidence stages, and legacy reports.
-- [ ] No arbitrary external targets, AI/ML, V3, or production-readiness claims.
-- [ ] Never use Redis `FLUSHDB` or `FLUSHALL`; isolate test keys with unique prefixes.
+- [x] Work only on `remnant-v2-development`.
+- [x] Keep PR #1 open and Draft; do not merge or mark ready.
+- [x] Do not modify `main`.
+- [x] Preserve V1-compatible constructors, runner, finding oracle, evidence stages, and legacy reports.
+- [x] No arbitrary external targets, AI/ML, V3, or production-readiness claims.
+- [x] Never use Redis `FLUSHDB` or `FLUSHALL`; isolate test keys with unique prefixes.
 
 ## Task 1 — Loopback origin and real Redis integration profile
 
@@ -49,7 +49,7 @@
 - [x] State exactly which guarantees come from Redis atomic SET; avoid unsupported linearizability claims.
 - [x] Document that shared mutable policy objects are outside the concurrency guarantee.
 
-**Exit:** implementation and regression coverage complete. Final PR-head GitHub Actions run 45814641214 passed 201 tests; consolidated local WSL verification is pending.
+**Exit:** complete. Final PR-head GitHub Actions run 45814641214 passed 201 tests; user-reported consolidated local WSL suite also passed **201 tests**.
 
 ## Task 4 — V2 PolicyEngine end-to-end tenant path
 
@@ -62,7 +62,7 @@
 - [x] Test tenant-admin boundary, explicit-deny precedence, inactive tenant, suspended/removed/unknown identity, unknown tenant, and unknown resource.
 - [x] Preserve the existing V1 default experiment path and public API.
 
-**Exit:** tenant-isolation scenarios and SQLite/JSON evidence persistence are implemented; consolidated validation pending.
+**Exit:** complete. Tenant-isolation scenarios and SQLite/JSON evidence persistence passed the final consolidated WSL and CI suites.
 
 ## Task 5 — Evidence, reporting, and documentation
 
@@ -77,10 +77,10 @@
 ## Task 6 — Full validation and review
 
 - [x] Add focused tests for the implemented tasks; focused execution is covered by the consolidated CI suite.
-- [ ] Run the complete WSL suite after all Phase 4 tasks; record user-reported output (pending).
+- [x] Run the complete WSL suite after all Phase 4 tasks; user-reported result: **201 passed**.
 - [x] Run GitHub Actions after all Phase 4 tasks on Python 3.12 / Redis 7 (run 45814641214: 201 passed in 3.29s).
 - [x] Include bounded service-boundary and concurrency tests in the final full CI suite.
 - [x] Review changed implementation, security boundaries, failure semantics, compatibility, and PR scope.
 - [x] Confirm PR #1 remains open and Draft, based on main; branch comparison is ahead 101 / behind 0 and no main changes were made.
 
-**Completion gate:** implementation and CI criteria are met. Phase 4 is awaiting one consolidated local WSL full-suite run before it can be marked fully validated.
+**Completion gate:** COMPLETE. Full local WSL validation and GitHub Actions both pass (201 tests each); PR #1 remains Draft and `main` remains untouched.
