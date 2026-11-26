@@ -20,9 +20,11 @@ The default `FastapiOriginAdapter` calls this app through HTTPX `ASGITransport`;
 
 The replay engine builds a cache key containing an experiment ID, principal ID, and resource ID. This isolates a replay entry to its run and tested identity/resource pair.
 
+The SHA-256 digest in cache metadata checks that the stored response body matches its accompanying digest. Because both are stored in the same Redis payload, this is not an authenticity guarantee against an actor who can rewrite the payload; the current design assumes Redis is within the trusted test boundary and does not use a MAC or signature.
+
 ### Cache replay experiment and finding oracle
 
-`remnant.engine.experiment.CacheReplayExperiment` coordinates the policy, origin adapter, and cache manager. On a miss, its normal cache path calls the origin adapter and stores HTTP 200 responses with V2 metadata. The experiment primes the cache while authorized, revokes the grant without deleting the entry, checks the origin directly, and then makes a normal cache request. The experiment records explicit cache observation states and invokes differential analysis for status code, selected headers, body digest, and canary.
+`remnant.engine.experiment.CacheReplayExperiment` coordinates the policy, origin adapter, and cache manager. On a miss, its normal cache path calls the origin adapter and stores HTTP 200 responses with V2 metadata. The experiment primes the cache while authorized, revokes the grant without deleting the entry, checks the origin directly, and then makes a normal cache request. The experiment records explicit cache observation states and invokes differential analysis for status code, selected headers, body digest, and canary. The V2 `PolicyEngine` is a separately tested authorization foundation and is not currently used by this replay pipeline; the experiment continues to use the V1-compatible `AuthorizationPolicy` grant/revoke model.
 
 `evaluate_finding` returns the individual booleans and their conjunction:
 
