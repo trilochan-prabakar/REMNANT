@@ -143,8 +143,7 @@ def test_concurrent_store_and_observe_on_shared_key_never_returns_torn_payload(s
                 assert observation.metadata is not None
                 assert observation.metadata.verify_body(observation.response.body)
                 assert observation.metadata.response_status == observation.response.status_code
-                assert observation.response.body in payloads.values()
-                assert observation.metadata.principal_id in payloads
+                assert payloads[observation.metadata.principal_id] == observation.response.body
         final = cache.observe(key)
         assert final.status.value == "HIT"
         assert final.metadata is not None and final.response is not None
