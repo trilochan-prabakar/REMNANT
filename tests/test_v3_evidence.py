@@ -8,27 +8,27 @@ from remnant.v3.runner import ScenarioRunner
 from remnant.v3.scenarios import ScenarioLoader
 
 
-@pytest.mark.asyncio
-async def test_store_and_compare_runs_without_response_bodies(tmp_path):
-    calls = {"count": 0}
+def test_store_and_compare_runs_without_response_bodies(tmp_path):
+    async def exercise():
+        calls = {"count": 0}
 
-    def handler(request):
-        calls["count"] += 1
-        return httpx.Response(
-            200,
-            headers={"X-Cache": "HIT" if calls["count"] > 1 else "MISS"},
-            json={"canary": f"version-{calls['count']}"},
+        def handler(request):
+            calls["count"] += 1
+            return httpx.Response(
+                200,
+                headers={"X-Cache": "HIT" if calls["count"] > 1 else "MISS"},
+                json={"canary": f"version-{calls['count']}"},
+            )
+
+        origin = httpx.AsyncClient(
+            base_url="http://origin.test",
+            transport=httpx.MockTransport(handler),
         )
-
-    origin = httpx.AsyncClient(
-        base_url="http://origin.test",
-        transport=httpx.MockTransport(handler),
-    )
-    proxy = httpx.AsyncClient(
-        base_url="http://proxy.test",
-        transport=httpx.MockTransport(handler),
-    )
-    scenario = ScenarioLoader().loads("""
+        proxy = httpx.AsyncClient(
+            base_url="http://proxy.test",
+            transport=httpx.MockTransport(handler),
+        )
+        scenario = ScenarioLoader().loads("""
 scenario:
   id: compare
   name: Compare
@@ -38,14 +38,16 @@ steps:
     path: /resource
     expect_status: 200
 """)
-    try:
-        runner = ScenarioRunner(origin_client=origin, proxy_client=proxy)
-        first = await runner.run(scenario)
-        second = await runner.run(scenario)
-    finally:
-        await origin.aclose()
-        await proxy.aclose()
+        try:
+            runner = ScenarioRunner(origin_client=origin, proxy_client=proxy)
+            first = await runner.run(scenario)
+            second = await runner.run(scenario)
+        finally:
+            await origin.aclose()
+            await proxy.aclose()
+        return first, second
 
+    first, second = asyncio.run(exercise())
     store = V3EvidenceStore(tmp_path / "evidence.sqlite3")
     store.save(first)
     store.save(second)
