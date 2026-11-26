@@ -1,0 +1,40 @@
+services:
+  origin:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: ["python", "examples/varnish-cache/origin.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  varnish:
+    image: varnish:7.6
+    depends_on:
+      origin:
+        condition: service_healthy
+    command: ["varnishd", "-F", "-a", ":8080", "-f", "/etc/varnish/default.vcl", "-s", "malloc,64m"]
+    volumes:
+      - ./default.vcl:/etc/varnish/default.vcl:ro
+    ports:
+      - "127.0.0.1:8088:8080"
+    healthcheck:
+      test: ["CMD", "varnishadm", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  check:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: ["python", "examples/varnish-cache/check.py"]
+    depends_on:
+      varnish:
+        condition: service_healthy
+    environment:
+      REMNANT_VARNISH_URL: http://varnish:8080
+      REMNANT_VARNISH_ORIGIN_URL: http://origin:8000
+    restart: "no"
