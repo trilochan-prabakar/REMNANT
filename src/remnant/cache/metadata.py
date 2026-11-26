@@ -9,7 +9,7 @@ from typing import Any
 
 
 def _finite_timestamp(value: Any) -> bool:
-    """Accept finite float timestamps and arbitrary-precision integer seconds."""
+    """Accept numeric timestamps representable as finite floats."""
     if type(value) not in (int, float):
         return False
     try:
