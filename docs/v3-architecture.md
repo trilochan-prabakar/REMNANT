@@ -99,7 +99,7 @@ production deployment.
 ## Validation
 
 The dedicated GitHub Actions workflow runs on pull requests to `main`, pushes
-to `main`, pushes to the retained `v3-development` branch, and manual dispatch.
+to `main`, and manual dispatch.
 It runs the complete Python regression suite, compiles the V3 package, and runs
 the isolated Varnish 7.6 integration. The main project workflow separately runs
 the Redis-backed regression suite, Docker demo, and Nginx integration.
