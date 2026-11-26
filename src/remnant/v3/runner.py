@@ -246,7 +246,7 @@ class ScenarioRunner:
             raise ValueError("request step has an unsupported route or method")
         from remnant.v3.scenarios import ScenarioLoader
         path = ScenarioLoader._path(step.path, 0)
-        started = datetime.now(timezone.utc)
+        started = time.perf_counter()
         async with client.stream(
             step.method, path, headers=dict(step.headers),
             timeout=self.timeout_seconds, follow_redirects=False,
@@ -266,7 +266,7 @@ class ScenarioRunner:
                     truncated = True
                     break
             body = b"".join(chunks)
-            elapsed = (datetime.now(timezone.utc) - started).total_seconds() * 1000
+            elapsed = (time.perf_counter() - started) * 1000
             headers = response.headers
             analysis = analyze_response(
                 response.status_code, dict(headers),

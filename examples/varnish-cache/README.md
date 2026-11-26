@@ -24,10 +24,13 @@ Compose network. No external target is contacted.
 3. Bob is denied at the origin. Varnish nevertheless returns Alice's cached
    response because the deliberately vulnerable VCL hashes the URL path but
    omits the query string containing the principal.
+4. A constrained V3 PURGE control removes the colliding cache object; Bob's next
+   request reaches the origin and receives HTTP 403.
 
 The fixture is intentionally vulnerable, not a secure production configuration.
-It validates REMNANT's ability to observe these two controlled conditions. The
-VCL must not be deployed as an actual reverse-proxy configuration.
+The check is driven by REMNANT's YAML scenario loader and HTTP scenario runner,
+including explicit grant/revoke controls and a Varnish PURGE operation. The VCL
+must not be deployed as an actual reverse-proxy configuration.
 
 ## Reset
 
