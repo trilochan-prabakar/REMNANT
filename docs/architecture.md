@@ -18,13 +18,13 @@ The default `FastapiOriginAdapter` calls this app through HTTPX `ASGITransport`;
 
 `remnant.cache.manager.RedisCacheManager` stores serialized `CachedHTTPResponse` snapshots in Redis. A stored snapshot preserves status code, headers, and body bytes and has a positive integer TTL. The V1-compatible `lookup` returns `HIT` or `MISS`. V2 `observe` preserves richer outcomes: `HIT`, `MISS`, `EXPIRED`, `UNKNOWN`, `BACKEND_ERROR`, and `INVALID_METADATA`. V2 entries can include schema-versioned metadata identifying principal/resource/tenant, response status, timestamps, and a SHA-256 body digest. Metadata is validated against the stored response; the cache manager still makes no authorization decisions.
 
-The replay engine builds a cache key containing an experiment ID, principal ID, and resource ID. This isolates a replay entry to its run and tested identity/resource pair.
+The replay engine builds a cache key containing an experiment ID, principal ID, and resource ID. In the V2 policy-engine path it additionally includes the tenant resolved from IdentityRegistry. This isolates a replay entry to its run and trusted identity/resource/tenant context.
 
 The SHA-256 digest in cache metadata checks that the stored response body matches its accompanying digest. Because both are stored in the same Redis payload, this is not an authenticity guarantee against an actor who can rewrite the payload; the current design assumes Redis is within the trusted test boundary and does not use a MAC or signature.
 
 ### Cache replay experiment and finding oracle
 
-`remnant.engine.experiment.CacheReplayExperiment` coordinates the policy, origin adapter, and cache manager. On a miss, its normal cache path calls the origin adapter and stores HTTP 200 responses with V2 metadata. The experiment primes the cache while authorized, revokes the grant without deleting the entry, checks the origin directly, and then makes a normal cache request. The experiment records explicit cache observation states and invokes differential analysis for status code, selected headers, body digest, and canary. The V2 `PolicyEngine` is a separately tested authorization foundation and is not currently used by this replay pipeline; the experiment continues to use the V1-compatible `AuthorizationPolicy` grant/revoke model.
+`remnant.engine.experiment.CacheReplayExperiment` coordinates the policy, origin adapter, and cache manager. On a miss, its normal cache path calls the origin adapter and stores HTTP 200 responses with V2 metadata. The experiment primes the cache while authorized, revokes the grant without deleting the entry, checks the origin directly, and then makes a normal cache request. The experiment records explicit cache observation states and invokes differential analysis for status code, selected headers, body digest, and canary. The default experiment path continues to use the V1-compatible `AuthorizationPolicy`. A separately selectable V2 path uses `PolicyEngineAdapter` with `create_v2_protected_origin_app`; it resolves tenant context from `IdentityRegistry`, resource ownership from `ResourceRegistry`, and grant/revoke operations from `PermissionStore`. Cache keys and metadata include that registry-derived tenant, and replay validation checks principal, resource, and tenant. See [V2 tenant-aware experiment](v2-tenant-aware-experiment.md).
 
 `evaluate_finding` returns the individual booleans and their conjunction:
 
@@ -117,3 +117,8 @@ sequenceDiagram
 ```
 
 If the normal cache lookup misses, the implementation calls the origin on that path. The miss cannot satisfy the cache-hit oracle condition.
+
+
+### Concurrent execution
+
+Concurrent replay tests use separate experiment instances and separate mutable policy instances while sharing a Redis client. Unique experiment IDs isolate their cache keys even when principals and resources match. A single Redis SET replaces the serialized response and metadata together; concurrent writers to a deliberately shared key may overwrite one another, and no deterministic winner or multi-command linearizability guarantee is claimed. Shared mutable policy objects are not declared thread-safe.
