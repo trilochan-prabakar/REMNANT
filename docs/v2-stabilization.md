@@ -19,7 +19,8 @@ Regression tests verify that the three origin requests in a run share one loop a
 ## 3. Explicit security boundaries
 
 - Cache `body_sha256` verifies consistency between the response body and its accompanying digest. Since both are stored in the same Redis payload, it does not authenticate the payload against an actor able to rewrite both values. The current design assumes Redis is within the trusted test boundary; it does not use a MAC or signature.
-- V2 `PolicyEngine` is a separately tested authorization foundation. The integrated `CacheReplayExperiment` still uses the V1-compatible `AuthorizationPolicy` grant/revoke flow. End-to-end tenant-aware policy enforcement and tenant-isolated replay remain future work.
+- The default `CacheReplayExperiment` path retains the V1-compatible `AuthorizationPolicy` grant/revoke flow. A separately selectable V2 path composes `PolicyEngineAdapter` with `create_v2_protected_origin_app` and exercises tenant-aware authorization, registry-derived tenant cache keys/metadata, and cross-tenant denial end-to-end.
+- The V2 origin resolves resources through `ResourceRegistry`. Built-in sample resources retain their fixtures; other explicitly registered resources receive deterministic test content and resource-specific canaries. This is still an in-memory controlled fixture, not production identity or resource integration.
 
 These boundaries are also documented in [security-and-limitations.md](security-and-limitations.md) and [architecture.md](architecture.md).
 

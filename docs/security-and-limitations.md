@@ -48,9 +48,9 @@ A cache `HIT` alone is not a finding: it says only that a response snapshot exis
 ## Controlled experiment assumptions
 
 - The default origin is the REMNANT FastAPI app and runs in-process through HTTPX `ASGITransport` behind the `OriginAdapter` protocol. An adapter can be injected, but arbitrary deployed services are not automatically discovered or scanned.
-- The policy and the experiment use the same `AuthorizationPolicy` instance. The standard setup creates an isolated policy; when a custom origin is supplied, the engine uses its app-state policy or validates an explicitly supplied policy against it.
-- The policy is a mutable, in-memory set of principal/resource grants. Revocation changes subsequent origin decisions immediately in this process.
-- The sample origin has two fixed resources with stable canaries. The test route creates every request principal as `Role.USER`.
+- The default V1-compatible path uses the same `AuthorizationPolicy` instance in the experiment and origin. The separately selectable V2 path uses `PolicyEngineAdapter` with the same `PolicyEngine` as the V2 origin.
+- Both policy paths are in-memory test fixtures. The V1 path uses the two built-in sample resources; the V2 path accepts resource IDs explicitly registered in `ResourceRegistry`, preserving built-in sample payloads and generating deterministic fixture content/canaries for other registered IDs.
+- The V2 origin resolves identity and tenant from trusted registries. Its request principal is a registered test identity; the query parameter is not authentication.
 - The cache keys are scoped by a unique experiment ID, principal ID, and resource ID; the V2 policy-engine path also includes the tenant resolved from the identity registry. This prevents separate runs and tested identity/resource/tenant contexts from sharing a response key.
 - Cached responses have a finite TTL. The experiment does not invalidate the entry on revocation; it remains subject to normal expiry.
 - Redis is expected at the configured URL (the integration setup uses `redis://localhost:6379/0`). Unit tests use controlled fakes implementing the small Redis client interface.
@@ -70,7 +70,7 @@ A cache key that omits the principal or resource can cause responses to be share
 
 ## Why origin authorization is independent
 
-The origin is called directly after revocation, bypassing the Redis lookup. It checks the current `AuthorizationPolicy` for that request. That independent response provides the origin side of the comparison; without it, a stale cached response would not establish that the origin now denies the caller.
+The origin is called directly after revocation, bypassing the Redis lookup. The V1 origin checks the current `AuthorizationPolicy`; the V2 origin asks its `PolicyEngineAdapter` to evaluate the registered identity and resource. That independent response provides the origin side of the comparison; without it, a stale cached response would not establish that the origin now denies the caller.
 
 ## Authorization model boundaries
 
@@ -84,15 +84,15 @@ The default `CacheReplayExperiment` path still uses the V1-compatible `Authoriza
 - It does not detect every cache-related authorization vulnerability or prove that an untested system is secure.
 - It does not test real browser or proxy caches, CDN behavior, HTTP cache directives, distributed invalidation, or production service boundaries. Bounded concurrency tests exercise independent experiment runs and atomic replacement of a serialized Redis value, not distributed linearizability.
 - It does not test authentication, identity federation, real user/tenant lifecycle, roles submitted by clients, or persistent policy changes.
-- It does not test policies beyond the small grant/revoke model, nor enumerate arbitrary resource identifiers.
-- It does not automatically discover endpoints or cache keys. The experiment targets the fixed protected resources and cache flow implemented in REMNANT.
+- It does not test policies beyond the small grant/revoke model, nor discover or enumerate resource identifiers on an external target. V2 can test only resource IDs already registered in its in-memory ResourceRegistry.
+- It does not automatically discover endpoints or cache keys. The experiment targets the protected resources and cache flow configured in REMNANT.
 - It does not persist authorization policy state. SQLite stores completed experiment results, the six compatibility evidence stages, finding conditions, and an additive V2 analysis record when supplied.
 - Differential response analysis compares selected dimensions and records diagnostic evidence. It is not proof of exploitability and never overrides the exact three-condition finding oracle.
 - V2 analysis persistence is designed to be body-free: it records statuses, comparison values, metadata summaries and SHA-256 digests, not raw response bodies or full cache keys.
 
 ## Identity, resource, and canary limitations
 
-The current origin accepts `principal_id` as a query parameter and constructs a `USER` principal; this is test input, not an authentication mechanism. The in-memory policy and fixed resource data are demonstration fixtures. They must not be treated as a production authorization service or as a source of real confidential data. The canaries are stable identifiers used to determine whether the selected resource's response body was replayed.
+The V1 origin accepts `principal_id` as a query parameter and constructs a `USER` principal; this is test input, not an authentication mechanism. The V2 origin accepts a principal identifier but resolves the identity and tenant from its trusted in-memory registries. Both paths use demonstration fixtures, not a production authorization service or real confidential data. V2 can serve built-in sample resources or generated fixture content for other explicitly registered resources. Canaries identify whether the selected resource's response body was replayed.
 
 ## Cache backend failure semantics
 

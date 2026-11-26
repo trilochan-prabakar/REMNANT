@@ -28,4 +28,4 @@ Redis SET replaces the serialized response-plus-metadata value as one command, s
 
 ## Scope
 
-This remains a controlled harness using the built-in protected resource catalogue. It is not a production identity provider, general-purpose web scanner, distributed authorization service, or proof of CDN-wide consistency.
+This remains a controlled harness using resources explicitly registered in its in-memory ResourceRegistry. The built-in sample resources retain their sample content; other registered resources receive deterministic fixture content and resource-specific canaries. The harness does not discover or enumerate resources from an external target. It is not a production identity provider, general-purpose web scanner, distributed authorization service, or proof of CDN-wide consistency.

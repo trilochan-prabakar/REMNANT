@@ -2,6 +2,7 @@
 
 import base64
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -41,6 +42,13 @@ class RedisCacheError(RuntimeError):
 
 class RedisCacheBackendError(RedisCacheError):
     """Raised when Redis itself cannot complete an operation."""
+
+
+def _is_finite_timestamp(value: int | float) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 class RedisCacheManager:
@@ -141,6 +149,12 @@ class RedisCacheManager:
 
     def observe(self, key: str, *, now: Optional[float] = None) -> CacheObservation:
         """Return an explicit V2 observation without collapsing errors to misses."""
+        if now is not None and (
+            type(now) not in (int, float)
+            or not _is_finite_timestamp(now)
+        ):
+            raise ValueError("now must be a finite numeric Unix timestamp")
+
         try:
             result = self.lookup(key)
         except RedisCacheBackendError as exc:

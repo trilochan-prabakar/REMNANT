@@ -98,3 +98,15 @@ def test_metadata_rejects_non_finite_stored_timestamps(field, timestamp):
 
     with pytest.raises(ValueError, match="finite numeric"):
         CacheMetadata.from_dict(data)
+
+
+def test_metadata_rejects_integer_timestamp_outside_float_range():
+    with pytest.raises(ValueError, match="finite numeric"):
+        CacheMetadata.create(
+            principal_id="alice",
+            resource_id="doc",
+            response_status=200,
+            body=b"body",
+            ttl_seconds=10,
+            now=10**400,
+        )
