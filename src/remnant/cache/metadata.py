@@ -1,6 +1,7 @@
 """Versioned, integrity-checked metadata for cached response snapshots."""
 
 import hashlib
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,8 +45,13 @@ class CacheMetadata:
             raise ValueError("response_status must be an HTTP status code")
         if not isinstance(self.body_sha256, str) or not _DIGEST_RE.fullmatch(self.body_sha256):
             raise ValueError("body_sha256 must be a lowercase SHA-256 hex digest")
-        if type(self.created_at) not in (int, float) or type(self.expires_at) not in (int, float):
-            raise ValueError("created_at and expires_at must be numeric Unix timestamps")
+        if (
+            type(self.created_at) not in (int, float)
+            or type(self.expires_at) not in (int, float)
+            or not math.isfinite(self.created_at)
+            or not math.isfinite(self.expires_at)
+        ):
+            raise ValueError("created_at and expires_at must be finite numeric Unix timestamps")
         if self.expires_at <= self.created_at:
             raise ValueError("expires_at must be later than created_at")
 
@@ -65,8 +71,8 @@ class CacheMetadata:
             raise ValueError("ttl_seconds must be a positive integer")
         if now is None:
             now = datetime.now(timezone.utc).timestamp()
-        if type(now) not in (int, float):
-            raise ValueError("now must be a numeric Unix timestamp")
+        if type(now) not in (int, float) or not math.isfinite(now):
+            raise ValueError("now must be a finite numeric Unix timestamp")
         if not isinstance(body, bytes):
             raise TypeError("body must be bytes")
         return cls(
