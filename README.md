@@ -163,13 +163,15 @@ With Docker Engine and the Compose plugin installed, run from the repository roo
 docker compose up --build
 ```
 
-Compose starts Redis 7, waits for its health check, and runs the REMNANT demo container. The protected FastAPI origin is created inside the demo process, so no separate origin service or host Python installation is required. The demo runs the grant → cache → revoke → replay experiment, persists the evidence, and writes JSON and standalone HTML reports to `reports/generated/` on the host. The demo container exits after completion; Redis remains available until stopped.
+Compose starts Redis 7, runs the REMNANT demo, and launches an isolated Nginx `proxy_cache` target with a small protected FastAPI origin. The REMNANT demo uses its in-process origin and writes JSON and standalone HTML reports to `reports/generated/` on the host. The Nginx check independently demonstrates a real proxy cache returning a cached 200 after its origin has begun returning 403. Both one-shot check containers exit after completion; the supporting services remain available until stopped.
 
 ```bash
 docker compose down
 ```
 
 Use `docker compose down -v` only if you also want to delete the named Redis data volume.
+
+The Nginx target and its exact test sequence are documented in [the Nginx integration lab](examples/nginx-cache/README.md). It is an intentionally vulnerable fixture for local testing, not a production configuration.
 
 ## Installation (Ubuntu / WSL2)
 

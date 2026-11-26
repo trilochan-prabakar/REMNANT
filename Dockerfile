@@ -3,6 +3,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts ./scripts
+COPY examples ./examples
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir '.[dev]'
 CMD ["python", "scripts/docker_demo.py"]

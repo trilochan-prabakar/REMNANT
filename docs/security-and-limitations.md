@@ -117,4 +117,4 @@ The concurrency suite uses independent experiment and policy instances with a sh
 
 ## Real-component validation boundary
 
-V2 includes integration tests against a real Redis 7 service and a loopback-only HTTP origin adapter. These validate the cache backend and a real local HTTP transport boundary. They do not constitute a test against an independently deployed reverse-proxy cache such as Nginx/Varnish or a CDN. Such a target requires its own adapter and test fixture so that the proxy's actual cache key, authorization forwarding, and invalidation behavior—not a simulated Redis path—are under test.
+V2 includes integration tests against a real Redis 7 service and a loopback-only HTTP origin adapter. The Docker Compose lab also exercises a real Nginx `proxy_cache` container against a stateful FastAPI origin: it primes a cached 200, revokes access at the origin, observes a direct 403, then verifies that Nginx returns the cached response with `X-Cache-Status: HIT` and the expected canary. This is one deliberately vulnerable configuration, not broad coverage of Nginx, Varnish, CDN, `Vary`, authorization-header, or production invalidation behavior.
