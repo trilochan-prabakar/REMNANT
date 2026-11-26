@@ -254,6 +254,19 @@ Expected observations in the included demonstration:
 
 The generated experiment ID links the result, SQLite record, and both reports. Runtime output is written under `reports/`, which is ignored by Git except for its tracked placeholder.
 
+### Example confirmed outcome
+
+The demonstration should end with the following key result fields (the experiment ID and report paths vary by run):
+
+```text
+Finding: CONFIRMED
+Evidence stages reloaded: 6
+JSON report: reports/generated/<experiment-id>.json
+HTML report: reports/generated/<experiment-id>.html
+```
+
+This is an output-shape example, not a captured terminal recording. The executable demo above is the source of truth for reproducing it.
+
 ## Project layout
 
 ```text
@@ -290,6 +303,8 @@ Read [Security and limitations](docs/security-and-limitations.md) before interpr
 
 ## Project status
 
-**REMNANT V2 is merged into `main`.** The completed V2 implementation was verified with 215 passing tests locally (user-reported WSL run) and 215 passing tests in GitHub Actions on the development branch before merge. The project is a controlled research and testing harness, not a production security product.
+**Current release: [v2.0.0](https://github.com/trilochan-prabakar/REMNANT/releases/tag/v2.0.0).** V2 is complete and merged into `main`. Its test suite was reported as 215 passing locally in WSL and passed 215 tests in GitHub Actions before release.
+
+The next version is intentionally not pre-scoped here. Further development should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
