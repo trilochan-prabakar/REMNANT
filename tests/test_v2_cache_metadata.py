@@ -75,3 +75,26 @@ def test_cache_observation_enforces_hit_evidence():
         CacheObservation(CacheObservationStatus.HIT)
     with pytest.raises(ValueError, match="only a HIT"):
         CacheObservation(CacheObservationStatus.MISS, response=response)
+
+
+
+@pytest.mark.parametrize("timestamp", [float("nan"), float("inf"), float("-inf")])
+def test_metadata_rejects_non_finite_creation_timestamp(timestamp):
+    with pytest.raises(ValueError, match="finite numeric"):
+        CacheMetadata.create(
+            principal_id="alice", resource_id="doc", response_status=200,
+            body=b"body", ttl_seconds=10, now=timestamp,
+        )
+
+
+@pytest.mark.parametrize("field", ["created_at", "expires_at"])
+@pytest.mark.parametrize("timestamp", [float("nan"), float("inf"), float("-inf")])
+def test_metadata_rejects_non_finite_stored_timestamps(field, timestamp):
+    data = CacheMetadata.create(
+        principal_id="alice", resource_id="doc", response_status=200,
+        body=b"body", ttl_seconds=10, now=1.0,
+    ).to_dict()
+    data[field] = timestamp
+
+    with pytest.raises(ValueError, match="finite numeric"):
+        CacheMetadata.from_dict(data)
