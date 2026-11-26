@@ -85,3 +85,20 @@ def test_loader_rejects_control_operation_on_wrong_client():
     scenario = SCENARIO.replace("via: origin", "via: proxy", 1)
     with pytest.raises(ValueError, match="grant/revoke require origin"):
         ScenarioLoader().loads(scenario)
+
+
+
+def test_run_many_rejects_stateful_lifecycle_scenarios():
+    async def exercise():
+        origin = httpx.AsyncClient(base_url="http://origin.test")
+        proxy = httpx.AsyncClient(base_url="http://proxy.test")
+        try:
+            runner = ScenarioRunner(origin_client=origin, proxy_client=proxy,
+                                    allow_control_operations=True)
+            scenario = ScenarioLoader().loads(SCENARIO)
+            with pytest.raises(ValueError, match="state-changing control scenarios"):
+                await runner.run_many([scenario], max_concurrency=1)
+        finally:
+            await origin.aclose()
+            await proxy.aclose()
+    asyncio.run(exercise())

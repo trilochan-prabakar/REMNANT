@@ -92,3 +92,33 @@ def test_cache_control_parser_keeps_commas_inside_quoted_value():
 def test_invalid_age_is_ignored():
     result = analyze_response(200, {"Age": "-5"})
     assert result.age_seconds is None
+
+
+def test_no_store_takes_precedence_over_public_and_freshness():
+    result = analyze_response(200, {"Cache-Control": "public, max-age=600, no-store"})
+    assert result.cacheability is Cacheability.NOT_CACHEABLE
+    assert result.freshness_lifetime_seconds is None
+
+
+def test_quoted_delta_seconds_is_parsed():
+    result = analyze_response(200, {"Cache-Control": 'public, max-age="45"'},
+        now=datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc))
+    assert result.freshness_lifetime_seconds == 45
+
+
+def test_invalid_max_age_does_not_create_freshness_lifetime():
+    result = analyze_response(200, {"Cache-Control": "public, max-age=invalid"})
+    assert result.cacheability is Cacheability.UNSPECIFIED
+    assert result.freshness_lifetime_seconds is None
+
+
+def test_cache_status_uses_first_cache_in_path_order():
+    result = analyze_response(200, {
+        "Cache-Status": "EdgeCache; hit, OriginShield; fwd=uri-miss"})
+    assert result.cache_state is CacheState.HIT
+
+
+def test_vary_field_names_are_normalized():
+    result = analyze_response(200, {
+        "Cache-Control": "max-age=60", "Vary": "Accept-Encoding, Authorization"})
+    assert result.vary == ("accept-encoding", "authorization")

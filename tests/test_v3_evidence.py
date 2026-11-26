@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 import httpx
 import pytest
@@ -63,3 +64,32 @@ def test_store_rejects_unknown_run(tmp_path):
     store = V3EvidenceStore(tmp_path / "evidence.sqlite3")
     with pytest.raises(KeyError):
         store.compare("missing-a", "missing-b")
+
+
+def test_v3_schema_v1_migrates_additively_to_v2(tmp_path):
+    import sqlite3
+
+    database = tmp_path / "legacy-v3.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.executescript("""
+            CREATE TABLE v3_runs (
+                run_id TEXT PRIMARY KEY,
+                scenario_id TEXT NOT NULL,
+                scenario_name TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('passed', 'failed', 'error')),
+                payload_json TEXT NOT NULL
+            );
+            CREATE INDEX idx_v3_runs_scenario ON v3_runs(scenario_id, completed_at);
+            PRAGMA user_version = 1;
+        """)
+
+    V3EvidenceStore(database)
+    with sqlite3.connect(database) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        table = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='v3_identity_isolation'"
+        ).fetchone()
+    assert version == 2
+    assert table is not None

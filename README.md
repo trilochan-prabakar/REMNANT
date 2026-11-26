@@ -9,7 +9,7 @@
   <a href="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml"><img src="https://github.com/trilochan-prabakar/REMNANT/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/Redis-7-DC382D" alt="Redis 7">
-  <a href="https://github.com/trilochan-prabakar/REMNANT/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-16A6A1" alt="Release v2.0.0"></a>
+  <img src="https://img.shields.io/badge/Project_Version-3.0.0-16A6A1" alt="Project version 3.0.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
 
@@ -19,9 +19,9 @@ It runs a controlled grant → cache → revoke → replay experiment against a 
 
 V2 builds on the original experiment with explicit cache-state observations, versioned metadata, differential response diagnostics, a separately selectable tenant-aware policy path, transactional SQLite evidence, and JSON/standalone HTML reports. It preserves the original three-condition finding oracle and legacy result/report compatibility.
 
-## V3 development
+## V3 capabilities
 
-The `v3-development` branch adds controlled HTTP scenario execution, HTTP cache directive and freshness analysis, a separate cross-identity isolation oracle, body-free V3 SQLite evidence with run-to-run comparison, and an isolated Varnish 7.6 integration fixture for authorization replay, resource updates, cross-identity isolation, and cache invalidation. V3 is additive: V1/V2 implementation files and report contracts remain unchanged. See [V3 usage](docs/v3-usage.md) and [V3 scope](docs/v3-scope.md). The Varnish fixture is intentionally vulnerable and must only be run locally.
+V3 is integrated into `main`. It adds controlled HTTP scenario execution, HTTP cache directive and freshness analysis, a separate cross-identity isolation oracle, body-free V3 SQLite evidence with run-to-run comparison, and an isolated Varnish 7.6 integration fixture for authorization replay, resource updates, cross-identity isolation, and cache invalidation. V3 is additive: V1/V2 implementation files and report contracts remain unchanged. See [V3 architecture](docs/v3-architecture.md), [V3 usage](docs/v3-usage.md), and [V3 scope](docs/v3-scope.md). The Varnish fixture is intentionally vulnerable and must only be run locally.
 
 > **Important scope boundary:** REMNANT is a controlled research and testing harness—not a general-purpose vulnerability scanner or production authorization system. It tests only the principal, resource, origin, cache path, and conditions exercised in a run. A negative result does not prove that a target is free of cache-related authorization flaws.
 
@@ -139,7 +139,10 @@ The default origin adapter uses an in-process FastAPI application through HTTPX 
 | Reporting | JSON schema 2.0 and standalone HTML; legacy schema 1.0 remains supported |
 
 Further reading:
-- [Architecture and experiment sequence](docs/architecture.md)
+- [V1/V2 architecture and experiment sequence](docs/architecture.md)
+- [V3 HTTP scenario architecture](docs/v3-architecture.md)
+- [V3 usage and scenario format](docs/v3-usage.md)
+- [V3 scope and implementation status](docs/v3-scope.md)
 - [V2 tenant-aware experiment path](docs/v2-tenant-aware-experiment.md)
 - [Security scope, assumptions, and limitations](docs/security-and-limitations.md)
 - [V2 phase completion records](docs/v2-phase-1.md), [Phase 2](docs/v2-phase-2.md), [Phase 2.1](docs/v2-phase-2.1.md), [Phase 3](docs/v2-phase-3.md), [Phase 4](docs/v2-phase-4.md)
@@ -305,7 +308,7 @@ This is an output-shape example, not a captured terminal recording. The executab
 
 ```text
 .
-├── docs/                 # Architecture, security notes, phase records
+├── docs/                 # V1/V2 and V3 architecture, security notes, phase records
 ├── src/remnant/
 │   ├── analysis/         # Differential analysis and finding oracle
 │   ├── api/              # Protected origin applications
@@ -314,7 +317,8 @@ This is an output-shape example, not a captured terminal recording. The executab
 │   ├── engine/           # Experiment orchestration
 │   ├── origin/            # Origin adapter implementations
 │   ├── reporting/        # JSON and standalone HTML reports
-│   └── storage/          # SQLite evidence persistence
+│   ├── storage/          # V1/V2 SQLite evidence persistence
+│   └── v3/               # V3 HTTP analysis, scenario runner, isolation oracle, evidence
 ├── tests/                # Unit, integration, recovery, and concurrency tests
 ├── docker-compose.yml
 └── pyproject.toml
@@ -351,8 +355,8 @@ Read [Security and limitations](docs/security-and-limitations.md) before interpr
 
 ## Project status
 
-**Current release: [v2.0.0](https://github.com/trilochan-prabakar/REMNANT/releases/tag/v2.0.0).** V2 is complete and merged into `main`. Its test suite was reported as 215 passing locally in WSL and passed 215 tests in GitHub Actions before release.
+**Project version: 3.0.0.** V3 is merged into `main`. This repository state is not represented as a published GitHub Release unless a matching release tag is present. V1 and V2 remain supported; V2 implementation files and contracts are frozen. V3 adds the controlled HTTP scenario runner, cache analysis, identity-isolation oracle, V3 evidence persistence, and Varnish integration described in [the V3 documentation](docs/v3-architecture.md).
 
-The next version is intentionally not pre-scoped here. Further development should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
+Future development beyond V3 is intentionally not pre-scoped. Any subsequent major work should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.

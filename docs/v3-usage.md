@@ -54,6 +54,10 @@ on the configured proxy. The update action is limited to a small content value
 and is intended for isolated fixture resource-version tests. These state-changing steps are disabled by default;
 enable them only with `allow_control_operations=True` when using an isolated,
 authorized test fixture. No arbitrary control URL or HTTP method can be supplied.
+Do not submit lifecycle scenarios to `run_many`: state-changing runs are rejected
+by batch execution because concurrent grants, revocations, resource updates, or
+PURGE operations against shared fixtures can interfere with one another. Execute
+each lifecycle scenario individually and reset/isolate its fixture between runs.
 
 ## Evidence and privacy
 
@@ -82,6 +86,14 @@ The V3 evidence database is separate from the frozen V2 evidence schema. Writes
 are transactional, run IDs are unique, and comparisons report changed steps,
 status codes, body digests, cache diagnostics, and assertion outcomes. Response
 bodies and secret request values are not persisted.
+
+Identity-isolation decisions can be attached to an existing run with
+`store.save_identity_isolation(run.run_id, isolation_result)` and retrieved with
+`store.get_identity_isolation(run.run_id)`. The linked record contains the
+decision, the two identity labels, observed statuses, cache-hit and canary-match
+booleans, and a short reason. It never stores the response body or canary value.
+The V3 evidence schema migrates additively from version 1 to version 2; the
+separate V2 evidence database is not migrated or modified.
 
 ## Identity isolation
 
