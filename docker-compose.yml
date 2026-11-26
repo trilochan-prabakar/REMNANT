@@ -1,12 +1,7 @@
-version: "3.8"
-
 services:
   redis:
     image: redis:7-alpine
-    container_name: remnant-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
       - remnant_redis_data:/data
@@ -14,7 +9,18 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./reports:/app/reports
+    restart: "no"
 
 volumes:
   remnant_redis_data:

@@ -1,4 +1,37 @@
-# REMNANT V2 security scope and limitations
+# REMNANT V2 threat model, security scope, and limitations
+
+## Threat model
+
+### Protected asset
+
+A response containing data that should be available only while a principal has an active authorization grant.
+
+### Security objective
+
+Determine whether the normal cache path can return a previously authorized response after a direct, cache-bypassed request to the origin denies the same principal. A finding requires the origin denial, a cache HIT, and the expected resource canary in that cached response.
+
+### Adversary and failure assumptions
+
+The test models a caller whose access has been revoked, or whose role/tenant relationship has changed, but who can still make an ordinary application request. The failure under study is stale authorization at a cache boundary: the origin has changed its decision while a cached representation may remain available. The harness also checks identity/resource/tenant metadata mismatches in its own cache adapter.
+
+### Trust boundaries
+
+- **Origin:** authoritative for the current authorization decision in this controlled experiment.
+- **Cache:** stores a previously authorized response and may outlive a grant until TTL expiry; it is not an authorization authority.
+- **Harness:** independently observes the direct origin response and normal cache-path result, then evaluates the strict oracle.
+- **Redis infrastructure:** trusted for the test. The body digest and response are stored together and are not authenticated against a malicious Redis writer.
+
+### Cache-key dimensions and deliberate coverage
+
+REMNANT's own cache key includes experiment ID, principal ID, and resource ID. The separately selectable V2 tenant-aware path adds the tenant resolved from the trusted in-memory identity registry. Replay metadata is checked against those same request-context dimensions.
+
+These are isolation dimensions in REMNANT's harness, not an audit of an external application's cache key. V2 does not systematically inject omitted-principal, omitted-resource, or omitted-tenant key bugs into Nginx, Varnish, a CDN, or a framework cache. Nor does it test every HTTP Vary, cookie, authorization-header, invalidation, or shared-cache directive interaction.
+
+### Weakness association
+
+The scenario is conceptually related to [MITRE CWE-524](https://cwe.mitre.org/data/definitions/524.html), whose current description concerns a cache containing sensitive information that can be read outside its intended control sphere. This is a broad association, not an automatic or definitive CWE mapping for every cache-replay result. [CWE-613](https://cwe.mitre.org/data/definitions/613.html) is deprecated in the current MITRE catalogue and is not used as a V2 mapping. A REMNANT finding is an experimental observation, not a vulnerability classification for an external product.
+
+
 
 ## What REMNANT tests
 
@@ -80,3 +113,8 @@ Use the framework only against systems and data you are authorized to test. The 
 ## Concurrency boundaries
 
 The concurrency suite uses independent experiment and policy instances with a shared Redis client. It verifies unique run keys and principal/resource/tenant metadata isolation. For a deliberately shared key, Redis SET atomically replaces the one serialized response-plus-metadata value; concurrent writers may overwrite one another, and REMNANT does not claim which writer wins, a multi-command transaction, or end-to-end linearizability. Sharing one mutable policy object between concurrent experiments is outside the supported guarantee.
+
+
+## Real-component validation boundary
+
+V2 includes integration tests against a real Redis 7 service and a loopback-only HTTP origin adapter. These validate the cache backend and a real local HTTP transport boundary. They do not constitute a test against an independently deployed reverse-proxy cache such as Nginx/Varnish or a CDN. Such a target requires its own adapter and test fixture so that the proxy's actual cache key, authorization forwarding, and invalidation behavior—not a simulated Redis path—are under test.
