@@ -18,6 +18,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
+    "uvicorn>=0.30",
 ]
 
 [tool.setuptools]
