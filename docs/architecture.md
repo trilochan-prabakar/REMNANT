@@ -12,7 +12,7 @@ This document describes the components implemented under `src/remnant/` and the 
 
 `remnant.api.app` provides `/health` and `GET /protected/{resource_id}?principal_id=...`. For protected requests, the route obtains the configured policy and checks it before returning a resource from the fixed in-memory resource map. Denied requests return HTTP 403. Authorized responses contain the resource ID, content, and stable canary. `create_protected_origin_app` creates an origin app bound to a supplied policy for isolated experiments.
 
-The default `FastapiOriginAdapter` calls this app through HTTPX `ASGITransport`; it does not start a separate network server. `CacheReplayExperiment` depends on the `OriginAdapter` protocol, so an alternate adapter can be injected for controlled tests or integrations. The synchronous `run()` API rejects invocation from an already-running event loop, and transport exceptions propagate rather than being converted into HTTP statuses.
+The default `FastapiOriginAdapter` calls this app through HTTPX `ASGITransport`; it does not start a separate network server. `CacheReplayExperiment` depends on the `OriginAdapter` protocol, so an alternate adapter can be injected for controlled tests or integrations. The synchronous `run()` API rejects invocation from an already-running event loop. It creates one event loop per experiment run and reuses it for all origin-adapter calls in that run, then closes it; adapters may reuse async resources within a run but must not retain loop-bound resources across separate `run()` calls. Transport exceptions propagate rather than being converted into HTTP statuses.
 
 ### Redis Cache Manager
 
