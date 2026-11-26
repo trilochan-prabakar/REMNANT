@@ -89,7 +89,7 @@ reference project has it; it must strengthen REMNANT's stated objective.
 
 ## Implementation status
 
-The following planned V3 capabilities have been implemented on the `v3-development` branch:
+The following V3 capabilities are implemented and merged into `main`:
 
 - [x] HTTP cache directive parsing, common cache-state headers, Age/Date/Expires freshness estimate, and Authorization-response diagnostics.
 - [x] Strict YAML scenario schema with relative-path-only requests, GET/HEAD allowlist, header validation, bounded step count, and no executable scenario content.
@@ -100,20 +100,15 @@ The following planned V3 capabilities have been implemented on the `v3-developme
 - [x] Isolated real Varnish fixture covering stale replay, cross-principal cache-key collision, resource update staleness, and PURGE invalidation.
 - [x] V3-specific GitHub Actions workflow and tests, including execution on pushes to `main`.
 
-The validation gate is the CI record below. The current development head has passed
-the listed regression, proxy integration, and compilation checks. V3 remains
-unmerged and is not frozen by this validation.
+The merged V3 implementation passed both dedicated V3 checks and the main project checks on pull request #13. The same workflows were then triggered again by the merge commit on `main` and completed successfully:
 
 
 ## Validation record
 
-The current V3 development head has passed:
-- the complete Python regression suite covering existing V1/V2 and new V3 tests;
-- V3 module compilation;
-- the isolated Varnish 7.6 lifecycle scenario;
-- the existing Docker Compose demo; and
-- the existing real Nginx `proxy_cache` integration.
+The post-merge `main` workflows passed on commit [`c1ec47a`](https://github.com/trilochan-prabakar/REMNANT/commit/c1ec47ade1bce0542043aa47b77497a10269bc89):
+- [Main project checks](https://github.com/trilochan-prabakar/REMNANT/actions/runs/45871985013): Python regression suite, Docker Compose demo, and real Nginx `proxy_cache` integration.
+- [V3 checks](https://github.com/trilochan-prabakar/REMNANT/actions/runs/45871984890): full V1/V2/V3 Python regression suite, V3 module compilation, and real Varnish 7.6 integration.
 
 The Varnish scenario covers grant/revoke replay, cross-identity cache-key collision,
-resource-content update staleness, and explicit PURGE invalidation. V3 remains on
-its separate development branch and is not merged or frozen by this record.
+resource-content update staleness, and explicit PURGE invalidation. V3 is integrated
+into `main`; this validation record does not declare V3 frozen.

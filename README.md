@@ -71,7 +71,7 @@ Differential response analysis is diagnostic evidence. It does not override or r
 
 ## Architecture
 
-The experiment engine coordinates the authorization policy, protected origin, Redis cache, analysis, and evidence pipeline. The V2 tenant-aware policy is an explicitly selectable path; the legacy V1-compatible policy remains available.
+The diagram below describes the V1/V2 Redis-backed experiment path, not the separate V3 HTTP scenario runner. See [V3 architecture](docs/v3-architecture.md) for V3's components, request flow, evidence model, and integration boundaries. The V2 tenant-aware policy is an explicitly selectable path; the legacy V1-compatible policy remains available.
 
 ```mermaid
 flowchart LR
@@ -355,7 +355,7 @@ Read [Security and limitations](docs/security-and-limitations.md) before interpr
 
 ## Project status
 
-**Project version: 3.0.0.** V3 is merged into `main`. This repository state is not represented as a published GitHub Release unless a matching release tag is present. V1 and V2 remain supported; V2 implementation files and contracts are frozen. V3 adds the controlled HTTP scenario runner, cache analysis, identity-isolation oracle, V3 evidence persistence, and Varnish integration described in [the V3 documentation](docs/v3-architecture.md).
+**Python package version: 3.0.0.** V3 is merged into `main`. GitHub Releases currently include `v1.0.0` and `v2.0.0`; a `v3.0.0` GitHub Release has not been published. V1 and V2 remain supported; V2 implementation files and contracts are frozen. V3 adds the controlled HTTP scenario runner, cache analysis, identity-isolation oracle, V3 evidence persistence, and Varnish integration described in [the V3 documentation](docs/v3-architecture.md).
 
 Future development beyond V3 is intentionally not pre-scoped. Any subsequent major work should follow additional research, evaluation against relevant implementations, and clearly demonstrated gaps—not a feature checklist for its own sake.
 

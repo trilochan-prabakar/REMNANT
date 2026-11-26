@@ -2,7 +2,7 @@ name: REMNANT V3 Tests
 
 on:
   push:
-    branches: [main, v3-development]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
