@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Proposed — awaiting design approval. No Phase 4 implementation has started.
+> **Status:** Task 1 implementation in progress; local and CI validation pending.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -15,9 +15,12 @@
 
 ## Task 1 — Loopback origin and real Redis integration profile
 
-- [ ] Design explicit network-origin adapter lifecycle and timeout behavior.
-- [ ] Start a protected test origin on loopback and an ephemeral port.
-- [ ] Reuse the Redis 7 integration service in CI.
+- [x] Design explicit network-origin adapter lifecycle and timeout behavior.
+- [x] Implement `LoopbackHTTPOriginAdapter` with literal-loopback-only URLs, bounded timeouts, no environment proxies/redirects, and per-request client cleanup.
+- [x] Add a real Uvicorn-hosted FastAPI origin on loopback and an ephemeral port in integration tests.
+- [x] Add a full experiment test using the existing Redis 7 CI service.
+- [ ] Pull and run the focused and full test suites in local WSL.
+- [ ] Confirm GitHub Actions passes with the loopback/Redis integration tests.
 - [ ] Verify readiness, deterministic shutdown, and failure cleanup.
 - [ ] Keep in-process ASGI as the fast default.
 - [ ] Verify integration tests never contact non-loopback hosts.
