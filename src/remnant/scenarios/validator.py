@@ -42,7 +42,6 @@ class ScenarioValidator:
             if not isinstance(value, tuple):
                 raise ScenarioValidationError(f"{field_name} must be a tuple")
 
-        self._unique(scenario.tenants, "tenant")
         if any(not isinstance(item, ScenarioIdentity) for item in scenario.identities):
             raise ScenarioValidationError("each identity must be a ScenarioIdentity")
         if any(not isinstance(item, ScenarioResource) for item in scenario.resources):
@@ -50,6 +49,7 @@ class ScenarioValidator:
         if any(not isinstance(item, ScenarioStep) for item in scenario.steps):
             raise ScenarioValidationError("each step must be a ScenarioStep")
 
+        self._unique(scenario.tenants, "tenant")
         self._unique((item.identity_id for item in scenario.identities), "identity")
         self._unique((item.resource_id for item in scenario.resources), "resource")
         tenant_ids = set(scenario.tenants)
