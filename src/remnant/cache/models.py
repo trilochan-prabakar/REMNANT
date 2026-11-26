@@ -2,9 +2,11 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from remnant.cache.manager import CachedHTTPResponse
+if TYPE_CHECKING:
+    from remnant.cache.manager import CachedHTTPResponse
+    from remnant.cache.metadata import CacheMetadata
 
 
 class CacheObservationStatus(str, Enum):
@@ -23,7 +25,7 @@ class CacheObservation:
     """A cache lookup result with an explicit outcome and optional evidence."""
 
     status: CacheObservationStatus
-    response: Optional[CachedHTTPResponse] = None
+    response: Optional["CachedHTTPResponse"] = None
     metadata: Optional["CacheMetadata"] = None
     diagnostic: Optional[str] = None
 
