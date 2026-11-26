@@ -355,12 +355,12 @@ def test_separate_experiment_runs_receive_separate_event_loops():
     class LoopRecordingAdapter:
         def __init__(self, policy):
             self._adapter = RecordingOriginAdapter(policy)
-            self.run_loop_ids = []
+            self.run_loops = []
 
         async def get_protected(self, resource_id, *, principal_id):
-            loop_id = id(asyncio.get_running_loop())
-            if not self.run_loop_ids or self.run_loop_ids[-1] != loop_id:
-                self.run_loop_ids.append(loop_id)
+            loop = asyncio.get_running_loop()
+            if not self.run_loops or self.run_loops[-1] is not loop:
+                self.run_loops.append(loop)
             return await self._adapter.get_protected(
                 resource_id, principal_id=principal_id
             )
@@ -377,8 +377,8 @@ def test_separate_experiment_runs_receive_separate_event_loops():
     second = experiment.run("bob", "document-1")
 
     assert first.finding_status == second.finding_status == "CONFIRMED"
-    assert len(adapter.run_loop_ids) == 2
-    assert adapter.run_loop_ids[0] != adapter.run_loop_ids[1]
+    assert len(adapter.run_loops) == 2
+    assert adapter.run_loops[0] is not adapter.run_loops[1]
 
 
 def test_experiment_rejects_both_origin_app_and_adapter():
