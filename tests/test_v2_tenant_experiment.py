@@ -1,5 +1,6 @@
 """End-to-end tests for the separately selectable tenant-aware V2 path."""
 
+import json
 from uuid import uuid4
 
 from remnant.api.v2 import create_v2_protected_origin_app
@@ -12,6 +13,8 @@ from remnant.auth.policy import PolicyEngine
 from remnant.auth.tenancy import Tenant, TenantRegistry
 from remnant.cache.manager import RedisCacheManager
 from remnant.engine.experiment import CacheReplayExperiment
+from remnant.reporting import ReportGenerator
+from remnant.storage import SQLiteEvidenceStore
 
 
 class MemoryRedis:
@@ -54,7 +57,7 @@ def build_experiment(engine):
     return CacheReplayExperiment(cache=cache, policy=adapter, origin_app=origin)
 
 
-def test_v2_tenant_path_uses_registry_tenant_in_cache_key_and_metadata():
+def test_v2_tenant_path_uses_registry_tenant_in_cache_key_and_metadata(tmp_path):
     engine, *_ = build_engine()
     experiment = build_experiment(engine)
 
@@ -69,6 +72,19 @@ def test_v2_tenant_path_uses_registry_tenant_in_cache_key_and_metadata():
     assert result.analysis_evidence.cache_prime_metadata.tenant_id == "tenant-a"
     assert result.analysis_evidence.replay_metadata.tenant_id == "tenant-a"
     assert result.analysis_evidence.replay_metadata.valid is True
+
+    store = SQLiteEvidenceStore(tmp_path / "tenant-evidence.sqlite3")
+    store.save_experiment(result)
+    saved = store.get_experiment(result.experiment_id)
+    report = json.loads(
+        ReportGenerator(store, tmp_path / "reports")
+        .generate_json(result.experiment_id)
+        .read_text()
+    )
+    analysis = json.loads(saved["analysis"]["analysis_json"])
+    assert analysis["replay_metadata"]["tenant_id"] == "tenant-a"
+    assert report["analysis"]["replay_metadata"]["tenant_id"] == "tenant-a"
+    assert "tenant-a" not in report["experiment"].get("cache_key", "")
 
 
 def test_tenant_a_cannot_prime_or_replay_tenant_b_resource():
