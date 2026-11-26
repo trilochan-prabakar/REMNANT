@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 4 — Realistic Testing and Robustness Plan
 
-> **Status:** Task 1 implementation in progress; local and CI validation pending.
+> **Status:** Task 1 complete; Task 2 is next.
 
 **Specification:** [2026-11-26-phase-4-realistic-robustness-design.md](../specs/2026-11-26-phase-4-realistic-robustness-design.md)
 
@@ -19,13 +19,13 @@
 - [x] Implement `LoopbackHTTPOriginAdapter` with literal-loopback-only URLs, bounded timeouts, no environment proxies/redirects, and per-request client cleanup.
 - [x] Add a real Uvicorn-hosted FastAPI origin on loopback and an ephemeral port in integration tests.
 - [x] Add a full experiment test using the existing Redis 7 CI service.
-- [ ] Pull and run the focused and full test suites in local WSL.
-- [ ] Confirm GitHub Actions passes with the loopback/Redis integration tests.
-- [ ] Verify readiness, deterministic shutdown, and failure cleanup.
-- [ ] Keep in-process ASGI as the fast default.
-- [ ] Verify integration tests never contact non-loopback hosts.
+- [x] Pull and run the focused and full test suites in local WSL (user-reported full suite: **188 passed**).
+- [x] Confirm GitHub Actions passes with the loopback/Redis integration tests (run 45812298565: **188 passed in 3.17s**, Python 3.12 / Redis 7).
+- [x] Verify readiness, deterministic shutdown, and failure cleanup through the managed Uvicorn fixture.
+- [x] Keep in-process ASGI as the fast default.
+- [x] Restrict adapter to literal loopback IPs and test rejection of external/ambiguous targets.
 
-**Exit:** repeated local and CI integration runs pass with no leaked server/client resources.
+**Exit:** focused and full local tests pass; GitHub Actions passes with real loopback HTTP and Redis 7. Server/client cleanup is managed by fixtures and context managers.
 
 ## Task 2 — Redis transient failure and recovery
 
