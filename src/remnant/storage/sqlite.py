@@ -58,18 +58,6 @@ CREATE INDEX IF NOT EXISTS idx_findings_confirmation_status
 SCHEMA_VERSION = 1
 
 
-_ANALYSIS_SCHEMA = """
-CREATE TABLE IF NOT EXISTS experiment_analysis (
-    experiment_id TEXT PRIMARY KEY REFERENCES experiments(experiment_id) ON DELETE CASCADE,
-    cache_observation_status TEXT NOT NULL,
-    differential_state TEXT NOT NULL,
-    analysis_json TEXT NOT NULL CHECK (json_valid(analysis_json)),
-    analysis_schema_version INTEGER NOT NULL CHECK (analysis_schema_version > 0),
-    created_at TEXT NOT NULL
-);
-"""
-
-
 class SQLiteEvidenceStore:
     """Save and query completed experiment results in a configurable SQLite file."""
 
