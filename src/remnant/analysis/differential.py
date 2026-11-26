@@ -100,11 +100,10 @@ def compare_responses(
         canary = _dimension(origin_has == cache_has, origin_has, cache_has)
 
     dimensions = (status, headers, body)
-    if any(item.state is ComparisonState.DIFFERENT for item in dimensions) or (
-        canary.state is ComparisonState.DIFFERENT
-    ):
+    evaluated = dimensions + ((canary,) if expected_canary is not None else ())
+    if any(item.state is ComparisonState.DIFFERENT for item in evaluated):
         overall = ComparisonState.DIFFERENT
-    elif any(item.state is ComparisonState.INDETERMINATE for item in dimensions + (canary,)):
+    elif any(item.state is ComparisonState.INDETERMINATE for item in evaluated):
         overall = ComparisonState.INDETERMINATE
     else:
         overall = ComparisonState.MATCH
