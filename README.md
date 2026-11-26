@@ -36,7 +36,7 @@ Specifically, the cache-bypassed origin must return HTTP 403, the ordinary cache
 
 ## Architecture
 
-The system components and experiment sequence are documented in [Architecture](docs/architecture.md). Assumptions and security boundaries are in [Security and limitations](docs/security-and-limitations.md).
+The system components and experiment sequence are documented in [Architecture](docs/architecture.md). The separately selectable tenant-aware V2 replay path is described in [V2 tenant-aware experiment](docs/v2-tenant-aware-experiment.md). Assumptions and security boundaries are in [Security and limitations](docs/security-and-limitations.md).
 
 ## Technology
 
