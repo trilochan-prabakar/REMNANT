@@ -171,10 +171,12 @@ def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
         assert result.oracle_cache_hit is True
         assert result.oracle_canary_matches is True
     finally:
-        if "result" in locals():
-            cache.delete(
-                experiment._cache_key(
-                    result.experiment_id, "alice", "document-1"
+        try:
+            if "result" in locals():
+                cache.delete(
+                    experiment._cache_key(
+                        result.experiment_id, "alice", "document-1"
+                    )
                 )
-            )
-        redis_client.close()
+        finally:
+            redis_client.close()
