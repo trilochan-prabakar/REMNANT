@@ -32,6 +32,7 @@ class ControlStep:
     principal: str | None = None
     path: str | None = None
     expected_status: int = 200
+    content: str | None = None
 
 
 ScenarioStep = RequestStep | ControlStep
@@ -54,7 +55,7 @@ class ScenarioLoader:
         "type", "name", "via", "method", "path", "headers",
         "expect_status", "expect_cache_state", "expect_body_contains",
     }
-    CONTROL_KEYS = {"type", "name", "operation", "via", "principal", "path", "expect_status"}
+    CONTROL_KEYS = {"type", "name", "operation", "via", "principal", "path", "content", "expect_status"}
     CACHE_STATES = {"hit", "miss", "stale", "bypass", "unknown"}
 
     @staticmethod
@@ -117,16 +118,31 @@ class ScenarioLoader:
                 operation = item.get("operation")
                 if not isinstance(operation, str):
                     raise ScenarioFormatError(f"step {index}: operation must be a string")
+                content = None
                 if operation in {"grant", "revoke"}:
                     principal = item.get("principal")
-                    if via != "origin" or not isinstance(principal, str) or not principal.strip() or "path" in item:
+                    if (
+                        via != "origin" or not isinstance(principal, str) or not principal.strip()
+                        or "path" in item or "content" in item
+                    ):
                         raise ScenarioFormatError(
-                            f"step {index}: grant/revoke require origin and a principal; path is fixed"
+                            f"step {index}: grant/revoke require origin and a principal; path/content are fixed"
                         )
                     path = None
+                elif operation == "update":
+                    content = item.get("content")
+                    if (
+                        via != "origin" or "principal" in item or "path" in item
+                        or not isinstance(content, str) or not content.strip() or len(content) > 256
+                    ):
+                        raise ScenarioFormatError(
+                            f"step {index}: update requires origin and 1-256 characters of content"
+                        )
+                    principal = None
+                    path = None
                 elif operation == "purge":
-                    if via != "proxy" or "principal" in item:
-                        raise ScenarioFormatError(f"step {index}: purge requires proxy and no principal")
+                    if via != "proxy" or "principal" in item or "content" in item:
+                        raise ScenarioFormatError(f"step {index}: purge requires proxy and no principal/content")
                     path = self._path(item.get("path"), index)
                     principal = None
                 else:
@@ -134,7 +150,10 @@ class ScenarioLoader:
                 expected = item.get("expect_status", 200)
                 if type(expected) is not int or not 100 <= expected <= 599:
                     raise ScenarioFormatError(f"step {index}: expect_status must be an HTTP status")
-                steps.append(ControlStep(name, operation, via, principal, path, expected))
+                steps.append(ControlStep(
+                    name=name, operation=operation, via=via, principal=principal,
+                    path=path, expected_status=expected, content=content,
+                ))
                 continue
 
             method, path = item.get("method", "GET"), self._path(item.get("path"), index)

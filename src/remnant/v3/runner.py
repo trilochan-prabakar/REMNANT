@@ -199,6 +199,13 @@ class ScenarioRunner:
             method = "POST"
             path = f"/__remnant__/control/{step.operation}"
             payload = {"principal": step.principal}
+        elif step.operation == "update":
+            if step.via != "origin" or not isinstance(step.content, str) or not step.content.strip():
+                raise ValueError("update controls require origin and non-empty content")
+            client = self.origin_client
+            method = "POST"
+            path = "/__remnant__/control/update"
+            payload = {"content": step.content}
         elif step.operation == "purge":
             if step.via != "proxy" or not isinstance(step.path, str):
                 raise ValueError("purge controls require proxy and a relative path")

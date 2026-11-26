@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 
 GRANTS: set[str] = {"alice"}
 CANARIES = {"alice": "alice-private-report", "bob": "bob-private-report"}
+RESOURCE_CONTENT = "resource-v1"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -33,13 +34,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(
             200,
-            {"principal": principal, "canary": CANARIES[principal], "content": "controlled fixture"},
+            {"principal": principal, "canary": CANARIES[principal], "content": RESOURCE_CONTENT},
             cache_control="public, max-age=120",
         )
 
     def do_POST(self) -> None:
         parsed = urlsplit(self.path)
-        if parsed.path not in {"/__remnant__/control/grant", "/__remnant__/control/revoke"}:
+        if parsed.path not in {
+            "/__remnant__/control/grant", "/__remnant__/control/revoke",
+            "/__remnant__/control/update",
+        }:
             self._send(404, {"error": "not_found"})
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -51,7 +55,19 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._send(400, {"error": "invalid_json"})
             return
-        principal = payload.get("principal") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            self._send(400, {"error": "invalid_payload"})
+            return
+        if parsed.path.endswith("/update"):
+            global RESOURCE_CONTENT
+            content = payload.get("content")
+            if content not in {"resource-v1", "resource-v2"}:
+                self._send(400, {"error": "invalid_resource_content"})
+                return
+            RESOURCE_CONTENT = content
+            self._send(200, {"content": RESOURCE_CONTENT})
+            return
+        principal = payload.get("principal")
         if principal not in CANARIES:
             self._send(400, {"error": "unknown_principal"})
             return
