@@ -22,6 +22,10 @@ from remnant.cache.manager import (
 from remnant.cache.models import CacheObservation, CacheObservationStatus
 from remnant.cache.metadata import CacheMetadata
 from remnant.analysis import compare_responses
+from remnant.analysis.models import (
+    CacheMetadataEvidence,
+    ExperimentAnalysisEvidence,
+)
 from remnant.analysis.oracle import evaluate_observation_finding
 from remnant.origin.fastapi import FastAPIOriginAdapter
 from remnant.origin.protocols import OriginAdapter, OriginResponse
@@ -56,6 +60,7 @@ class ExperimentResult:
     completed_at: Optional[str] = None
     cache_observation_status: Optional[str] = None
     differential_state: Optional[str] = None
+    analysis_evidence: Optional[ExperimentAnalysisEvidence] = None
 
 
 def evaluate_finding(
@@ -162,7 +167,7 @@ class CacheReplayExperiment:
         initial_response = self._origin_request(principal_id, resource_id)
 
         # B: use the regular cache path, priming Redis from the authorized origin.
-        prime_status, prime_response, _ = self._cached_request(
+        prime_status, prime_response, _prime_observation = self._cached_request(
             principal_id,
             resource_id,
             cache_key,
@@ -217,6 +222,26 @@ class CacheReplayExperiment:
             observation,
             expected_canary=expected_canary.encode("utf-8"),
         )
+        prime_metadata_evidence = self._metadata_evidence(
+            primed_entry, principal_id=principal_id, resource_id=resource_id
+        )
+        replay_metadata_evidence = self._metadata_evidence(
+            observation, principal_id=principal_id, resource_id=resource_id
+        )
+        diagnostic_categories = self._diagnostic_categories(
+            primed_entry, observation
+        )
+        analysis_evidence = ExperimentAnalysisEvidence(
+            schema_version=1,
+            initial_origin_status=initial_response.status_code,
+            cache_prime_observation_status=primed_entry.status.value,
+            cache_prime_metadata=prime_metadata_evidence,
+            post_revocation_origin_status=bypassed_response.status_code,
+            replay_observation_status=observation.status.value,
+            replay_metadata=replay_metadata_evidence,
+            differential=differential,
+            diagnostic_categories=diagnostic_categories,
+        )
         completed_at = datetime.now(timezone.utc).isoformat()
 
         return ExperimentResult(
@@ -239,7 +264,55 @@ class CacheReplayExperiment:
             completed_at=completed_at,
             cache_observation_status=observation.status.value,
             differential_state=differential.state.value,
+            analysis_evidence=analysis_evidence,
         )
+
+    @staticmethod
+    def _metadata_evidence(
+        observation: CacheObservation,
+        *,
+        principal_id: str,
+        resource_id: str,
+    ) -> CacheMetadataEvidence:
+        metadata = observation.metadata
+        if metadata is None:
+            return CacheMetadataEvidence(present=False, valid=False)
+        response = observation.response
+        valid = (
+            observation.status is CacheObservationStatus.HIT
+            and response is not None
+            and metadata.principal_id == principal_id
+            and metadata.resource_id == resource_id
+            and metadata.response_status == response.status_code
+            and metadata.verify_body(response.body)
+        )
+        return CacheMetadataEvidence(
+            present=True,
+            valid=valid,
+            schema_version=metadata.schema_version,
+            principal_id=metadata.principal_id,
+            resource_id=metadata.resource_id,
+            tenant_id=metadata.tenant_id,
+            response_status=metadata.response_status,
+            created_at=metadata.created_at,
+            expires_at=metadata.expires_at,
+            body_sha256=metadata.body_sha256,
+        )
+
+    @staticmethod
+    def _diagnostic_categories(
+        *observations: CacheObservation,
+    ) -> tuple[str, ...]:
+        categories = set()
+        for observation in observations:
+            if observation.status is not CacheObservationStatus.HIT:
+                categories.add(f"CACHE_{observation.status.value}")
+            diagnostic = observation.diagnostic or ""
+            if "identity" in diagnostic.lower():
+                categories.add("METADATA_IDENTITY_MISMATCH")
+            elif diagnostic:
+                categories.add("CACHE_DIAGNOSTIC")
+        return tuple(sorted(categories))
 
     def _origin_request(self, principal_id: str, resource_id: str) -> OriginResponse:
         """Call the configured adapter from the synchronous V1 experiment API."""
