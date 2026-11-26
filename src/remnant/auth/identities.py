@@ -8,6 +8,11 @@ class IdentityRegistry:
 
     def __init__(self) -> None:
         self._identities: dict[str, Principal] = {}
+        self._version = 0
+
+    @property
+    def version(self) -> int:
+        return self._version
 
     def register(self, principal: Principal) -> Principal:
         self._validate_id(principal.principal_id, "principal_id")
@@ -17,6 +22,7 @@ class IdentityRegistry:
         if principal.status is not AccountStatus.ACTIVE:
             raise ValueError("new identities must start ACTIVE")
         self._identities[principal.principal_id] = principal
+        self._version += 1
         return principal
 
     def get(self, principal_id: str) -> Principal | None:
@@ -40,7 +46,9 @@ class IdentityRegistry:
         normalized = tuple(dict.fromkeys(roles))
         updated = replace(current, role=normalized[0] if normalized else Role.USER,
                           roles=normalized)
-        self._identities[principal_id] = updated
+        if updated != current:
+            self._identities[principal_id] = updated
+            self._version += 1
         return updated
 
     def list_identities(self) -> tuple[Principal, ...]:
@@ -49,7 +57,9 @@ class IdentityRegistry:
     def _set_status(self, principal_id: str, status: AccountStatus) -> Principal:
         current = self._require(principal_id)
         updated = replace(current, status=status)
-        self._identities[principal_id] = updated
+        if updated != current:
+            self._identities[principal_id] = updated
+            self._version += 1
         return updated
 
     def _require(self, principal_id: str) -> Principal:

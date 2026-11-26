@@ -12,6 +12,11 @@ class TenantRegistry:
 
     def __init__(self) -> None:
         self._tenants: dict[str, Tenant] = {}
+        self._version = 0
+
+    @property
+    def version(self) -> int:
+        return self._version
 
     def register(self, tenant: Tenant) -> Tenant:
         if not isinstance(tenant.tenant_id, str) or not tenant.tenant_id.strip():
@@ -19,6 +24,7 @@ class TenantRegistry:
         if tenant.tenant_id in self._tenants:
             raise ValueError(f"tenant already exists: {tenant.tenant_id}")
         self._tenants[tenant.tenant_id] = tenant
+        self._version += 1
         return tenant
 
     def get(self, tenant_id: str) -> Tenant | None:
@@ -31,5 +37,7 @@ class TenantRegistry:
         if tenant is None:
             raise KeyError(f"unknown tenant: {tenant_id}")
         updated = Tenant(tenant_id=tenant_id, active=bool(active))
-        self._tenants[tenant_id] = updated
+        if updated != tenant:
+            self._tenants[tenant_id] = updated
+            self._version += 1
         return updated

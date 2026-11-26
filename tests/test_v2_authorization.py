@@ -102,6 +102,15 @@ def test_permission_policy_version_increments_only_on_changes(world):
     assert engine.version == initial + 2
 
 
+def test_policy_version_tracks_identity_and_tenant_state_changes(world):
+    engine, identities, _, _, tenants = world
+    initial = engine.version
+    identities.suspend("bob")
+    assert engine.version == initial + 1
+    tenants.set_active("tenant-b", False)
+    assert engine.version == initial + 2
+
+
 def test_role_updates_and_removed_identity_cannot_be_reactivated(world):
     _, identities, *_ = world
     identities.set_roles("bob", (Role.TENANT_ADMIN,))

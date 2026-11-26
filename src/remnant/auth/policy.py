@@ -72,7 +72,8 @@ class PolicyEngine:
 
     @property
     def version(self) -> int:
-        return self.permissions.version
+        return (self.identities.version + self.resources.version +
+                self.permissions.version + self.tenants.version)
 
     def evaluate(
         self,

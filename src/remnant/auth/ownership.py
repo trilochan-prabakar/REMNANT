@@ -6,6 +6,11 @@ class ResourceRegistry:
 
     def __init__(self) -> None:
         self._resources: dict[str, Resource] = {}
+        self._version = 0
+
+    @property
+    def version(self) -> int:
+        return self._version
 
     def register(self, resource: Resource) -> Resource:
         for name, value in (("resource_id", resource.resource_id),
@@ -16,6 +21,7 @@ class ResourceRegistry:
         if resource.resource_id in self._resources:
             raise ValueError(f"resource already exists: {resource.resource_id}")
         self._resources[resource.resource_id] = resource
+        self._version += 1
         return resource
 
     def get(self, resource_id: str) -> Resource | None:
@@ -25,7 +31,9 @@ class ResourceRegistry:
 
     def remove(self, resource_id: str) -> Resource:
         try:
-            return self._resources.pop(resource_id)
+            resource = self._resources.pop(resource_id)
+            self._version += 1
+            return resource
         except KeyError as exc:
             raise KeyError(f"unknown resource: {resource_id}") from exc
 
