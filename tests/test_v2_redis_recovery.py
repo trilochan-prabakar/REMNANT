@@ -73,12 +73,13 @@ def test_initial_read_failure_is_indeterminate_then_independent_run_recovers(
     try:
         first = experiment.run("alice", "document-1")
         assert first.finding_status == "NOT_FOUND"
-        assert first.cache_observation_status == "HIT"
-        # The initial read failure prevents the cache path from trusting a
-        # cached entry. The post-revocation origin returns 403, so no finding.
+        assert first.analysis_evidence.cache_prime_observation_status == "BACKEND_ERROR"
+        assert first.cache_observation_status == "MISS"
+        # The initial read failure prevents cache priming. The replay then
+        # observes a miss and receives the independently denied origin response.
         assert first.oracle_origin_denies is True
-        assert first.oracle_cache_hit is True
-        assert first.oracle_canary_matches is True
+        assert first.oracle_cache_hit is False
+        assert first.oracle_canary_matches is False
 
         recovered = experiment.run("alice", "document-1")
         assert recovered.finding_status == "CONFIRMED"
