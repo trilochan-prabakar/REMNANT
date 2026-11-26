@@ -49,7 +49,8 @@ for controlled systems that the operator owns or is authorized to test.
 ### 4. Execution and robustness
 
 - Execute controlled scenarios against configured origin/proxy fixtures.
-- Support bounded concurrency, request timeouts, setup/teardown, and clear failure states.
+- Support bounded concurrency for read-only scenario batches, request timeouts, setup/teardown, and clear failure states.
+- Reject state-changing lifecycle scenarios in concurrent batches so shared fixture state cannot be interleaved by the runner.
 - Preserve per-request traces needed to explain a result.
 
 ### 5. Evidence and reporting
@@ -57,6 +58,7 @@ for controlled systems that the operator owns or is authorized to test.
 - Produce structured, reproducible experiment results.
 - Include cache behavior diagnostics, request/response traces with secrets redacted,
   and comparison between runs.
+- Persist an optional identity-isolation decision against its parent V3 run, without storing the response body or canary value.
 - Do not assign generic severity/CVSS or confidence scores: the framework records
   controlled observations, while impact depends on target-specific asset sensitivity,
   exposure, and business context.
@@ -94,9 +96,9 @@ The following planned V3 capabilities have been implemented on the `v3-developme
 - [x] Asynchronous origin/proxy scenario runner with per-request timeouts, response-size cap, no redirects, redacted evidence, and explicit PASS/FAIL/ERROR outcomes.
 - [x] Independent four-condition identity-isolation oracle.
 - [x] Explicit grant/revoke, resource-content update, and proxy PURGE lifecycle steps.
-- [x] Separate transactional V3 SQLite evidence store and deterministic run comparison.
+- [x] Separate transactional V3 SQLite evidence store, additive schema-v1-to-v2 migration, deterministic run comparison, and linked identity-isolation evidence.
 - [x] Isolated real Varnish fixture covering stale replay, cross-principal cache-key collision, resource update staleness, and PURGE invalidation.
-- [x] V3-specific GitHub Actions workflow and tests.
+- [x] V3-specific GitHub Actions workflow and tests, including execution on pushes to `main`.
 
 The validation gate is the CI record below. The current development head has passed
 the listed regression, proxy integration, and compilation checks. V3 remains

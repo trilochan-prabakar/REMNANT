@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from remnant.v3.identity_isolation import IdentityIsolationResult
 from remnant.v3.runner import ScenarioRun, run_to_dict
 
 
@@ -34,7 +35,7 @@ class RunComparison:
 class V3EvidenceStore:
     """Persist body-free V3 run records without changing the V2 evidence schema."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -73,6 +74,17 @@ class V3EvidenceStore:
                     """
                 )
                 connection.commit()
+                version = 1
+            if version == 1:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute("""
+                    CREATE TABLE v3_identity_isolation (
+                        run_id TEXT PRIMARY KEY REFERENCES v3_runs(run_id) ON DELETE CASCADE,
+                        payload_json TEXT NOT NULL
+                    )
+                """)
+                connection.execute("PRAGMA user_version = 2")
+                connection.commit()
 
     def save(self, run: ScenarioRun) -> None:
         if not isinstance(run, ScenarioRun):
@@ -92,6 +104,36 @@ class V3EvidenceStore:
                 ),
             )
             connection.commit()
+
+    def save_identity_isolation(self, run_id: str, result: IdentityIsolationResult) -> None:
+        """Attach a body-free identity-isolation decision to an existing V3 run."""
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise ValueError("run_id must be a non-empty string")
+        if not isinstance(result, IdentityIsolationResult):
+            raise TypeError("result must be an IdentityIsolationResult")
+        payload = {
+            "status": result.status.value, "requester_id": result.requester_id,
+            "owner_id": result.owner_id, "origin_status": result.origin_status,
+            "proxy_status": result.proxy_status, "cache_hit": result.cache_hit,
+            "foreign_canary_match": result.foreign_canary_match, "reason": result.reason,
+        }
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("""
+                INSERT INTO v3_identity_isolation (run_id, payload_json) VALUES (?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET payload_json = excluded.payload_json
+            """, (run_id, json.dumps(payload, sort_keys=True, separators=(",", ":"))))
+            connection.commit()
+
+    def get_identity_isolation(self, run_id: str) -> dict[str, Any] | None:
+        """Read the linked isolation decision; response bodies/canaries are not stored."""
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise ValueError("run_id must be a non-empty string")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT payload_json FROM v3_identity_isolation WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        return json.loads(row["payload_json"]) if row else None
 
     def get(self, run_id: str) -> dict[str, Any] | None:
         if not isinstance(run_id, str) or not run_id.strip():

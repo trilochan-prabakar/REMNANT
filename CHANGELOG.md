@@ -2,6 +2,35 @@
 
 Notable changes to REMNANT are documented here.
 
+## 3.0.0 — REMNANT V3
+
+V3 extends the controlled authorization-replay experiment into a repeatable HTTP cache testing harness. It is additive to the V1/V2 implementation.
+
+### Added
+
+- HTTP cache directive, freshness, Vary, Set-Cookie, and observed cache-state analysis.
+- Validated YAML scenarios and a bounded asynchronous origin/proxy request runner.
+- Separate four-condition cross-identity isolation oracle.
+- Explicit fixture lifecycle controls for grant, revoke, resource update, and proxy PURGE.
+- V3-specific transactional SQLite evidence and run-to-run comparison.
+- Optional persistence of identity-isolation decisions linked to a V3 run.
+- Real Varnish 7.6 integration for stale authorization replay, cross-identity cache-key collision, resource update staleness, and PURGE invalidation.
+- Read-only scenario batches support bounded concurrency; state-changing lifecycle scenarios are rejected by batch execution to prevent shared-fixture interleaving.
+- GitHub Actions validation for the full regression suite, V3 compilation, and real Varnish integration on pull requests and pushes to `main`.
+
+### Compatibility and scope
+
+- V1 and V2 source modules, result/report contracts, and evidence schemas remain unchanged.
+- V2 remains frozen.
+- V3 protocol diagnostics are not vulnerability findings by themselves; strict finding oracles remain separate.
+- REMNANT remains a controlled testing harness, not an unrestricted internet scanner.
+
+### Validation
+
+- The V3 pull request completed all five checks successfully before merge.
+- The post-merge `main` workflow completed successfully.
+- See [V3 scope](docs/v3-scope.md) and [V3 architecture](docs/v3-architecture.md) for validation boundaries and limitations.
+
 ## 2.0.0 — REMNANT V2
 
 REMNANT V2 expands the original controlled cache-replay experiment while preserving its V1-compatible finding oracle and legacy result/report fields.

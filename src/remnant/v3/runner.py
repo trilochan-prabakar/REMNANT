@@ -124,7 +124,11 @@ class ScenarioRunner:
         self, scenarios: tuple[ScenarioDefinition, ...] | list[ScenarioDefinition],
         *, max_concurrency: int = 4,
     ) -> tuple[ScenarioRun, ...]:
-        """Run independent scenarios concurrently with a strict worker bound."""
+        """Run read-only scenarios concurrently with a strict worker bound.
+
+        Stateful lifecycle controls are rejected because shared fixtures could
+        interleave grants, revocations, updates, and cache invalidations.
+        """
         if not isinstance(scenarios, (tuple, list)):
             raise TypeError("scenarios must be a tuple or list")
         if type(max_concurrency) is not int or not 1 <= max_concurrency <= 16:
@@ -133,6 +137,11 @@ class ScenarioRunner:
             raise ValueError("at most 100 scenarios may be run in one batch")
         if any(not isinstance(item, ScenarioDefinition) for item in scenarios):
             raise TypeError("every scenario must be a ScenarioDefinition")
+        if any(isinstance(step, ControlStep) for scenario in scenarios for step in scenario.steps):
+            raise ValueError(
+                "run_many does not accept state-changing control scenarios; "
+                "run each lifecycle scenario individually against an isolated fixture"
+            )
         semaphore = asyncio.Semaphore(max_concurrency)
 
         async def guarded(scenario: ScenarioDefinition) -> ScenarioRun:
