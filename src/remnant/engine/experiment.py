@@ -77,10 +77,13 @@ def evaluate_finding(
     Legacy inputs are normalized into the V2 observation model while callers
     retain the original signature and FindingOracle result type.
     """
-    if cache_status is CacheStatus.HIT and response_body is not None:
+    if cache_status is CacheStatus.HIT:
+        # Preserve the legacy meaning of HIT even when a caller has no body
+        # available: the cache condition is true, while the canary condition
+        # remains false. A missing body must not rewrite HIT into UNKNOWN.
         observation = CacheObservation(
             CacheObservationStatus.HIT,
-            response=CachedHTTPResponse(200, (), response_body),
+            response=CachedHTTPResponse(200, (), response_body or b""),
         )
     else:
         observation = CacheObservation(
@@ -178,8 +181,12 @@ class CacheReplayExperiment:
         *,
         ttl_seconds: int,
     ) -> ExperimentResult:
-        if not principal_id.strip() or not resource_id.strip():
-            raise ValueError("principal_id and resource_id must not be empty")
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            raise ValueError("principal_id must be a non-empty string")
+        if not isinstance(resource_id, str) or not resource_id.strip():
+            raise ValueError("resource_id must be a non-empty string")
+        if type(ttl_seconds) is not int or ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be a positive integer")
         if resource_id not in app_module.PROTECTED_RESOURCES:
             raise ValueError(f"unknown protected resource: {resource_id}")
 
