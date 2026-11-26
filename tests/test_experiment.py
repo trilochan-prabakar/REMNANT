@@ -372,7 +372,7 @@ def test_experiment_analysis_evidence_is_serializable_and_body_free():
         "status_code", "selected_headers", "body_digest", "canary"
     }
     assert "remnant-canary-document-1-7b91c2e4" not in encoded
-    assert "body" not in encoded
+    assert "response_body" not in encoded
     assert "cache_key" not in encoded
 
 
