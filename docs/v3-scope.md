@@ -36,7 +36,7 @@ for controlled systems that the operator owns or is authorized to test.
 - Preserve the existing three-condition stale-authorization finding oracle.
 - Add explicit identity-isolation experiments to test whether one principal can receive
   another principal's protected representation.
-- Add resource lifecycle and revocation/invalidation scenarios.
+- Add resource-content update, revocation, and explicit cache-invalidation scenarios.
 - Use validated, repeatable scenario definitions; no automatic unrestricted crawling.
 
 ### 3. Real cache implementations
@@ -56,7 +56,10 @@ for controlled systems that the operator owns or is authorized to test.
 
 - Produce structured, reproducible experiment results.
 - Include cache behavior diagnostics, request/response traces with secrets redacted,
-  severity/confidence where justified, and comparison between runs.
+  and comparison between runs.
+- Do not assign generic severity/CVSS or confidence scores: the framework records
+  controlled observations, while impact depends on target-specific asset sensitivity,
+  exposure, and business context.
 - Never promote a cache HIT, protocol anomaly, or heuristic score into a confirmed
   authorization finding without satisfying the strict oracle.
 
@@ -90,8 +93,9 @@ The following planned V3 capabilities have been implemented on the `v3-developme
 - [x] Strict YAML scenario schema with relative-path-only requests, GET/HEAD allowlist, header validation, bounded step count, and no executable scenario content.
 - [x] Asynchronous origin/proxy scenario runner with per-request timeouts, response-size cap, no redirects, redacted evidence, and explicit PASS/FAIL/ERROR outcomes.
 - [x] Independent four-condition identity-isolation oracle.
+- [x] Explicit grant/revoke, resource-content update, and proxy PURGE lifecycle steps.
 - [x] Separate transactional V3 SQLite evidence store and deterministic run comparison.
-- [x] Isolated real Varnish fixture covering stale replay and cross-principal cache-key collision.
+- [x] Isolated real Varnish fixture covering stale replay, cross-principal cache-key collision, resource update staleness, and PURGE invalidation.
 - [x] V3-specific GitHub Actions workflow and tests.
 
 Completion is not declared until the full existing regression suite, the V3-specific suite, and the Varnish integration workflow pass. CI results and any remaining limitations must be recorded before V3 is considered release-ready.

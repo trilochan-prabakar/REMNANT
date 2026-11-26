@@ -90,3 +90,17 @@ steps:
 """)
     assert scenario.steps[0].operation == "revoke"
     assert scenario.steps[1].operation == "purge"
+
+
+def test_update_control_requires_bounded_content():
+    with pytest.raises(ScenarioFormatError, match="update requires origin"):
+        ScenarioLoader().loads("""
+scenario:
+  id: update
+  name: Update
+steps:
+  - type: control
+    name: update
+    operation: update
+    via: origin
+""")

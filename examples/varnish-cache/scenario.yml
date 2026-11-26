@@ -71,3 +71,53 @@ steps:
     method: GET
     path: /protected/report?principal=bob
     expect_status: 403
+
+  - type: control
+    name: regrant-alice-for-resource-update
+    operation: grant
+    via: origin
+    principal: alice
+
+  - name: prime-resource-version-one
+    via: proxy
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 200
+    expect_cache_state: miss
+    expect_body_contains: resource-v1
+
+  - type: control
+    name: update-origin-resource
+    operation: update
+    via: origin
+    content: resource-v2
+
+  - name: origin-serves-updated-resource
+    via: origin
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 200
+    expect_body_contains: resource-v2
+
+  - name: proxy-still-serves-old-resource
+    via: proxy
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 200
+    expect_cache_state: hit
+    expect_body_contains: resource-v1
+
+  - type: control
+    name: purge-stale-resource-version
+    operation: purge
+    via: proxy
+    path: /protected/report?principal=alice
+    expect_status: 200
+
+  - name: proxy-fetches-updated-resource-after-purge
+    via: proxy
+    method: GET
+    path: /protected/report?principal=alice
+    expect_status: 200
+    expect_cache_state: miss
+    expect_body_contains: resource-v2

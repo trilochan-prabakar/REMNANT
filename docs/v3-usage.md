@@ -47,11 +47,11 @@ Each request may assert an expected status, observed cache state, or body marker
 Assertions are evaluated independently and failures are retained in the run
 record. A transport error stops the scenario and produces an ERROR result.
 
-Scenarios may also use constrained fixture-control steps: `grant` and `revoke`
-call only the fixed `/__remnant__/control/{action}` endpoint on the configured
-origin, while `purge` sends a Varnish-style PURGE to a relative path on the
-configured proxy. These state-changing steps are disabled by default; enable
-them only with `allow_control_operations=True` when using an isolated,
+Scenarios may also use constrained fixture-control steps: `grant`, `revoke`,
+and `update` call only fixed `/__remnant__/control/{action}` endpoints on the
+configured origin, while `purge` sends a Varnish-style PURGE to a relative path
+on the configured proxy. These state-changing steps are disabled by default;
+enable them only with `allow_control_operations=True` when using an isolated,
 authorized test fixture. No arbitrary control URL or HTTP method can be supplied.
 
 ## Evidence and privacy

@@ -26,6 +26,8 @@ Compose network. No external target is contacted.
    omits the query string containing the principal.
 4. A constrained V3 PURGE control removes the colliding cache object; Bob's next
    request reaches the origin and receives HTTP 403.
+5. The origin resource changes from `resource-v1` to `resource-v2`; Varnish
+   continues serving the old representation until PURGE, then fetches v2.
 
 The fixture is intentionally vulnerable, not a secure production configuration.
 The check is driven by REMNANT's YAML scenario loader and HTTP scenario runner,
