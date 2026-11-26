@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from threading import Lock
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -118,6 +119,7 @@ class CacheReplayExperiment:
     ) -> None:
         self._cache = cache
         self._active_runner: Optional[asyncio.Runner] = None
+        self._run_lock = Lock()
         if origin_adapter is not None and origin_app is not None:
             raise ValueError("provide origin_adapter or origin_app, not both")
 
@@ -163,16 +165,19 @@ class CacheReplayExperiment:
                 "CacheReplayExperiment.run() cannot be called from a running event loop"
             )
 
-        if self._active_runner is not None:
+        if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("this experiment is already running")
-        with asyncio.Runner() as runner:
-            self._active_runner = runner
-            try:
-                return self._run_with_runner(
-                    principal_id, resource_id, ttl_seconds=ttl_seconds
-                )
-            finally:
-                self._active_runner = None
+        try:
+            with asyncio.Runner() as runner:
+                self._active_runner = runner
+                try:
+                    return self._run_with_runner(
+                        principal_id, resource_id, ttl_seconds=ttl_seconds
+                    )
+                finally:
+                    self._active_runner = None
+        finally:
+            self._run_lock.release()
 
     def _run_with_runner(
         self,

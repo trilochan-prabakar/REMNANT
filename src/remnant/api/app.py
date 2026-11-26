@@ -8,6 +8,7 @@ from remnant.auth.models import (
 from remnant.auth.policy import AuthorizationPolicy
 
 
+API_VERSION = "2.0.0"
 authorization_policy = AuthorizationPolicy()
 
 PROTECTED_RESOURCES: dict[str, dict[str, str]] = {
@@ -24,7 +25,7 @@ PROTECTED_RESOURCES: dict[str, dict[str, str]] = {
 app = FastAPI(
     title="REMNANT",
     description="Stateful Cache–Authorization Consistency Testing Framework",
-    version="0.1.0",
+    version=API_VERSION,
 )
 
 
@@ -33,7 +34,7 @@ async def health_check() -> dict[str, str]:
     return {
         "status": "healthy",
         "project": "REMNANT",
-        "version": "0.1.0",
+        "version": API_VERSION,
     }
 
 
@@ -75,7 +76,7 @@ async def get_protected_resource(
 
 def create_protected_origin_app(policy: AuthorizationPolicy) -> FastAPI:
     """Create an isolated protected origin using the supplied policy."""
-    origin = FastAPI(title="REMNANT protected origin")
+    origin = FastAPI(title="REMNANT protected origin", version=API_VERSION)
     origin.state.authorization_policy = policy
     origin.add_api_route(
         "/protected/{resource_id}",

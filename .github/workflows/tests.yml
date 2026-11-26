@@ -11,6 +11,8 @@ jobs:
   test:
     name: Python 3.12 / Redis 7 / Nginx proxy_cache
     runs-on: ubuntu-latest
+    env:
+      REMNANT_REDIS_HOST_PORT: 6380
     services:
       redis:
         image: redis:7-alpine

@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 import uvicorn
 from redis import Redis
+from redis.exceptions import RedisError
 
 from remnant.cache.manager import RedisCacheManager
 from remnant.engine.experiment import CacheReplayExperiment
@@ -150,7 +151,16 @@ def test_loopback_adapter_wraps_connection_failure_as_transport_error():
 def test_full_experiment_uses_loopback_origin_and_real_redis(live_origin):
     policy, base_url = live_origin
     policy.grant("alice", "document-1")
-    redis_client = Redis.from_url("redis://localhost:6379/0")
+    redis_client = Redis.from_url(
+        "redis://localhost:6379/0",
+        socket_connect_timeout=1,
+        socket_timeout=1,
+    )
+    try:
+        redis_client.ping()
+    except RedisError as exc:
+        redis_client.close()
+        pytest.skip(f"localhost:6379 Redis is unavailable: {exc}")
     cache = RedisCacheManager(
         client=redis_client,
         key_prefix=f"remnant:phase4-loopback:{uuid4().hex}:",

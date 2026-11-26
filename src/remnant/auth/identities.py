@@ -15,8 +15,15 @@ class IdentityRegistry:
         return self._version
 
     def register(self, principal: Principal) -> Principal:
+        if not isinstance(principal, Principal):
+            raise TypeError("principal must be a Principal")
         self._validate_id(principal.principal_id, "principal_id")
         self._validate_id(principal.tenant_id, "tenant_id")
+        self._validate_roles(principal.roles)
+        if not isinstance(principal.role, Role):
+            raise ValueError("role must be a supported Role")
+        if not isinstance(principal.status, AccountStatus):
+            raise ValueError("status must be a supported AccountStatus")
         if principal.principal_id in self._identities:
             raise ValueError(f"identity already exists: {principal.principal_id}")
         if principal.status is not AccountStatus.ACTIVE:
@@ -43,9 +50,13 @@ class IdentityRegistry:
 
     def set_roles(self, principal_id: str, roles: tuple[Role, ...]) -> Principal:
         current = self._require(principal_id)
+        self._validate_roles(roles)
         normalized = tuple(dict.fromkeys(roles))
-        updated = replace(current, role=normalized[0] if normalized else Role.USER,
-                          roles=normalized)
+        updated = replace(
+            current,
+            role=normalized[0] if normalized else Role.USER,
+            roles=normalized,
+        )
         if updated != current:
             self._identities[principal_id] = updated
             self._version += 1
@@ -72,3 +83,8 @@ class IdentityRegistry:
     def _validate_id(value: str, field_name: str) -> None:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{field_name} cannot be empty")
+
+    @staticmethod
+    def _validate_roles(roles: tuple[Role, ...]) -> None:
+        if not isinstance(roles, tuple) or any(not isinstance(role, Role) for role in roles):
+            raise ValueError("roles must be a tuple of supported Role values")
