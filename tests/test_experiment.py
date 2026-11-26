@@ -59,6 +59,46 @@ def test_authorized_cache_replay_after_revocation_confirms_finding():
     assert len(redis.values) == 1
 
 
+def test_experiment_uses_v2_observation_and_differential_pipeline():
+    experiment, _, redis = build_experiment()
+
+    result = experiment.run("alice", "document-1", ttl_seconds=30)
+
+    assert result.cache_observation_status == "HIT"
+    assert result.differential_state == "DIFFERENT"
+    stored_payload = next(iter(redis.values.values()))[0]
+    payload = json.loads(stored_payload)
+    assert payload["metadata"]["principal_id"] == "alice"
+    assert payload["metadata"]["resource_id"] == "document-1"
+    assert payload["metadata"]["response_status"] == 200
+    assert len(payload["metadata"]["body_sha256"]) == 64
+
+
+def test_experiment_does_not_confirm_when_cache_metadata_identity_is_wrong():
+    experiment, _, _ = build_experiment()
+    original_store = experiment._cache.store
+
+    def store_with_wrong_identity(key, response, *, ttl_seconds, metadata=None):
+        from remnant.cache.metadata import CacheMetadata
+
+        wrong = CacheMetadata.create(
+            principal_id="mallory",
+            resource_id="document-1",
+            response_status=response.status_code,
+            body=response.body,
+            ttl_seconds=ttl_seconds,
+        )
+        return original_store(key, response, ttl_seconds=ttl_seconds, metadata=wrong)
+
+    experiment._cache.store = store_with_wrong_identity
+    result = experiment.run("alice", "document-1", ttl_seconds=30)
+
+    assert result.cache_primed is False
+    assert result.cache_observation_status == "INVALID_METADATA"
+    assert result.oracle_cache_hit is False
+    assert result.finding_status == "NOT_FOUND"
+
+
 def test_oracle_does_not_confirm_when_origin_allows():
     oracle = evaluate_finding(
         origin_status=200,
