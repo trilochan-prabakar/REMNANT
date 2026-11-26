@@ -25,6 +25,12 @@ A cache `HIT` alone is not a finding: it says only that a response snapshot exis
 
 These assumptions make the replay sequence reproducible; they do not reproduce every target application's request routing, authorization model, cache key, TTL, invalidation behavior, or deployment topology.
 
+## Cache metadata integrity and trust boundary
+
+The `body_sha256` field is an integrity check for consistency between the response bytes and the digest value currently stored in the metadata. It can detect accidental corruption or a response-body change when the metadata remains trustworthy. It is **not an authenticity mechanism**: the digest and response are stored together in the same Redis payload, so an actor able to modify that payload can replace both the body and its digest, and may also alter the metadata fields. The current implementation does not use a keyed MAC, digital signature, or independently protected metadata store.
+
+Accordingly, REMNANT assumes Redis and the cache payload are within the experiment's trusted test boundary. A valid digest means only that the body matches the accompanying digest; it does not prove who created the entry or that its identity fields are genuine. Reports and documentation must not describe the current SHA-256 field as tamper-proof or cryptographically authenticated metadata. A future authenticated-metadata design would need explicit key generation, storage, rotation, and verification rules.
+
 ## Why principal/resource scoped cache keys matter
 
 A cache key that omits the principal or resource can cause responses to be shared across identities or resources. That is a separate class of isolation error and can make an experiment ambiguous. REMNANT includes experiment, principal, and resource identifiers in the key so the result is attributable to the exact run and pair being tested. The key design is part of this harness; it is not a claim about how an external application constructs its own cache keys.
@@ -32,6 +38,12 @@ A cache key that omits the principal or resource can cause responses to be share
 ## Why origin authorization is independent
 
 The origin is called directly after revocation, bypassing the Redis lookup. It checks the current `AuthorizationPolicy` for that request. That independent response provides the origin side of the comparison; without it, a stale cached response would not establish that the origin now denies the caller.
+
+## Authorization model boundaries
+
+The V2 `PolicyEngine` is a standalone authorization foundation backed by identity, tenant, resource, and permission registries. It provides default-deny decisions, tenant-boundary checks, explicit-deny precedence, ownership rules, and tenant-scoped administrator permissions.
+
+The current `CacheReplayExperiment` still runs the V1-compatible `AuthorizationPolicy` grant/revoke model for its origin sequence. The V2 `PolicyEngine` is not yet wired into that replay pipeline, and the current end-to-end experiment therefore does not demonstrate tenant-aware authorization or tenant-isolated cache replay. The presence of the V2 policy classes and their unit tests must not be presented as proof that the integrated experiment enforces those V2 rules. End-to-end policy and tenant integration is deferred to a separately designed phase.
 
 ## What REMNANT does not test
 
