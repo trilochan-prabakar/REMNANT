@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 3 — Evidence and Architecture Integration Plan
 
-> **Status:** Implementation complete; local validation passed; GitHub Actions/release review pending.
+> **Status:** Complete — local and GitHub Actions validation passed.
 
 **Goal:** Complete the experiment's origin-adapter integration and persist/report V2 cache-observation and differential evidence while preserving V1 compatibility.
 
@@ -82,10 +82,10 @@
 
 - [x] Update README to describe the current V2 experiment path and its limits.
 - [x] Update architecture and security/limitations docs.
-- [ ] Add `docs/v2-phase-3.md` after GitHub Actions and release review are complete.
+- [x] Add `docs/v2-phase-3.md` with implementation and validation results.
 - [x] Run focused tests after each task.
 - [x] Run the full local test suite; user-reported result: **168 passed**.
-- [ ] Confirm GitHub Actions passes on Python 3.12 / Redis 7.
-- [ ] Review the complete diff for compatibility, migration safety, data minimization, and scope creep.
+- [x] Confirm GitHub Actions passes on Python 3.12 / Redis 7: 168 passed in 2.07s.
+- [x] Review compatibility, migration safety, data minimization, and scope boundaries; see the Phase 3 completion record.
 
 **Completion gate:** all Phase 3 acceptance criteria in the specification are met; exact local and CI counts are recorded; PR remains Draft and `main` remains untouched.
