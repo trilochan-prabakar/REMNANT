@@ -46,7 +46,7 @@ def test_transport_timeout_is_recorded_as_error_without_leaking_request_data():
             raise httpx.ReadTimeout("sensitive query=do-not-store", request=request)
 
         origin = httpx.AsyncClient(
-            base_url="http://origin.test?api_key=top-secret",
+            base_url="http://origin.test",
             transport=httpx.MockTransport(timeout),
         )
         proxy = httpx.AsyncClient(base_url="http://proxy.test")

@@ -66,7 +66,9 @@ def test_set_cookie_is_reported_without_assuming_not_cacheable():
     ("headers", "expected"),
     [
         ({"X-Cache": "HIT"}, CacheState.HIT),
+        ({"Cache-Status": "ExampleCache; hit"}, CacheState.HIT),
         ({"X-Cache": "MISS"}, CacheState.MISS),
+        ({"Cache-Status": "ExampleCache; fwd=uri-miss"}, CacheState.MISS),
         ({"CF-Cache-Status": "STALE"}, CacheState.STALE),
         ({"X-Cache-Status": "BYPASS"}, CacheState.BYPASS),
         ({}, CacheState.UNKNOWN),
