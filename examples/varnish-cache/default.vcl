@@ -22,7 +22,7 @@ sub vcl_recv {
     }
 
     # Test-fixture control operations must never be cached.
-    if (req.url ~ "^/control/") {
+    if (req.url ~ "^/__remnant__/control/") {
         return (pass);
     }
 

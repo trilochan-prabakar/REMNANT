@@ -69,3 +69,24 @@ def test_rejects_more_than_100_steps():
     text = "scenario:\n  id: many\n  name: Many\nsteps:\n" + steps
     with pytest.raises(ScenarioFormatError, match="100"):
         ScenarioLoader().loads(text)
+
+
+def test_loads_explicit_control_steps():
+    scenario = ScenarioLoader().loads("""
+scenario:
+  id: control
+  name: Control
+steps:
+  - type: control
+    name: revoke-user
+    operation: revoke
+    via: origin
+    principal: alice
+  - type: control
+    name: purge-cache
+    operation: purge
+    via: proxy
+    path: /private
+""")
+    assert scenario.steps[0].operation == "revoke"
+    assert scenario.steps[1].operation == "purge"

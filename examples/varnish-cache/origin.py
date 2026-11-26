@@ -39,7 +39,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlsplit(self.path)
-        if parsed.path not in {"/control/grant", "/control/revoke"}:
+        if parsed.path not in {"/__remnant__/control/grant", "/__remnant__/control/revoke"}:
             self._send(404, {"error": "not_found"})
             return
         length = int(self.headers.get("Content-Length", "0"))
