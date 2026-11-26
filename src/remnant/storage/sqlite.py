@@ -55,6 +55,21 @@ CREATE INDEX IF NOT EXISTS idx_findings_confirmation_status
 """
 
 
+SCHEMA_VERSION = 1
+
+
+_ANALYSIS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS experiment_analysis (
+    experiment_id TEXT PRIMARY KEY REFERENCES experiments(experiment_id) ON DELETE CASCADE,
+    cache_observation_status TEXT NOT NULL,
+    differential_state TEXT NOT NULL,
+    analysis_json TEXT NOT NULL CHECK (json_valid(analysis_json)),
+    analysis_schema_version INTEGER NOT NULL CHECK (analysis_schema_version > 0),
+    created_at TEXT NOT NULL
+);
+"""
+
+
 class SQLiteEvidenceStore:
     """Save and query completed experiment results in a configurable SQLite file."""
 
@@ -82,11 +97,39 @@ class SQLiteEvidenceStore:
         return connection
 
     def initialize(self) -> None:
-        """Create tables and indexes; safe to call more than once."""
+        """Create or transactionally migrate the database to the current schema."""
         connection = self._connect()
         try:
-            with connection:
-                connection.executescript(_SCHEMA)
+            connection.execute("BEGIN IMMEDIATE")
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"database schema version {version} is newer than supported "
+                    f"version {SCHEMA_VERSION}"
+                )
+            # _SCHEMA contains ordinary CREATE TABLE/INDEX statements. Execute
+            # individually so the migration remains inside this transaction.
+            for statement in _SCHEMA.split(";"):
+                if statement.strip():
+                    connection.execute(statement)
+            if version < 1:
+                connection.execute(
+                    """CREATE TABLE IF NOT EXISTS experiment_analysis (
+                       experiment_id TEXT PRIMARY KEY
+                           REFERENCES experiments(experiment_id) ON DELETE CASCADE,
+                       cache_observation_status TEXT NOT NULL,
+                       differential_state TEXT NOT NULL,
+                       analysis_json TEXT NOT NULL CHECK (json_valid(analysis_json)),
+                       analysis_schema_version INTEGER NOT NULL
+                           CHECK (analysis_schema_version > 0),
+                       created_at TEXT NOT NULL
+                    )"""
+                )
+                connection.execute("PRAGMA user_version = 1")
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
@@ -153,6 +196,22 @@ class SQLiteEvidenceStore:
                         ) in evidence
                     ],
                 )
+                if result.analysis_evidence is not None:
+                    analysis = result.analysis_evidence.to_dict()
+                    connection.execute(
+                        """INSERT INTO experiment_analysis
+                           (experiment_id, cache_observation_status, differential_state,
+                            analysis_json, analysis_schema_version, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            result.experiment_id,
+                            result.analysis_evidence.replay_observation_status,
+                            result.analysis_evidence.differential.state.value,
+                            json.dumps(analysis, separators=(",", ":"), sort_keys=True),
+                            result.analysis_evidence.schema_version,
+                            completed_at,
+                        ),
+                    )
                 connection.execute(
                     """INSERT INTO findings
                        (experiment_id, classification, origin_denies, cache_hit,
@@ -188,10 +247,15 @@ class SQLiteEvidenceStore:
             finding = connection.execute(
                 "SELECT * FROM findings WHERE experiment_id = ?", (experiment_id,)
             ).fetchone()
+            analysis = connection.execute(
+                "SELECT * FROM experiment_analysis WHERE experiment_id = ?",
+                (experiment_id,),
+            ).fetchone()
             return {
                 **dict(experiment),
                 "evidence": [dict(row) for row in evidence],
                 "finding": dict(finding) if finding is not None else None,
+                "analysis": dict(analysis) if analysis is not None else None,
             }
         finally:
             connection.close()
