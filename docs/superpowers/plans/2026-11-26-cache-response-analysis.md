@@ -1,6 +1,6 @@
 # REMNANT V2 Phase 2 — Cache and Response Analysis Implementation Plan
 
-> **Status:** Draft plan. Implement on `remnant-v2-development` only.
+> **Status:** Complete — implementation and validation recorded in [v2-phase-2.md](../../v2-phase-2.md).
 
 **Goal:** Make cache state and response comparison explicit while preserving independent origin authorization and the V1 replay-finding oracle.
 
@@ -84,3 +84,8 @@
 5. Update the Phase 2 status document with actual implemented capabilities and exact test counts only after verification.
 
 **Phase 2 completion gate:** all acceptance criteria in the specification are met, the full suite passes, and the implementation is reviewed. Keep PR #1 draft until then.
+
+
+## Final validation
+
+See [Phase 2 completion record](../../v2-phase-2.md) for the exact local and GitHub Actions test results and review boundaries. The full suite passed with 148 tests locally and in CI, including both real-Redis integration tests. PR #1 remains Draft and `main` remains unchanged.
