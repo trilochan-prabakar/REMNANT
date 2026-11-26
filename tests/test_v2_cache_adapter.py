@@ -134,3 +134,20 @@ def test_delete_only_removes_the_requested_namespaced_key():
     assert "isolated:one" in redis.deleted
     assert "isolated:two" in redis.values
     assert "isolated:two" not in redis.deleted
+
+
+@pytest.mark.parametrize("timestamp", [True, "101", float("nan"), float("inf"), float("-inf")])
+def test_observe_rejects_invalid_explicit_clock_values(timestamp):
+    cache = RedisCacheManager(client=FakeRedis())
+
+    with pytest.raises(ValueError, match="finite numeric Unix timestamp"):
+        cache.observe("missing", now=timestamp)
+
+
+def test_observe_accepts_integer_explicit_clock_value():
+    cache = RedisCacheManager(client=FakeRedis())
+    cache.store("entry", response(), ttl_seconds=30, metadata=metadata(now=100))
+
+    observation = cache.observe("entry", now=101)
+
+    assert observation.status is CacheObservationStatus.HIT
