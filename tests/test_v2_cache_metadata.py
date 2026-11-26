@@ -36,7 +36,7 @@ def test_metadata_round_trip_and_body_digest():
         {"response_status": True},
         {"response_status": 99},
         {"body_sha256": "not-a-digest"},
-        {"expires_at": 100.0},
+        {"expires_at": 0.5},
         {"unexpected": "field"},
     ],
 )
