@@ -342,3 +342,6 @@ def test_sync_experiment_fails_clearly_inside_running_event_loop():
             experiment.run("alice", "document-1")
 
     asyncio.run(invoke())
+    assert experiment._policy.is_allowed(
+        Principal("alice", Role.USER), "document-1"
+    ).allowed is False
