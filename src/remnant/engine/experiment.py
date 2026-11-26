@@ -62,6 +62,7 @@ class ExperimentResult:
     cache_observation_status: Optional[str] = None
     differential_state: Optional[str] = None
     analysis_evidence: Optional[ExperimentAnalysisEvidence] = None
+    tenant_id: Optional[str] = None
 
 
 def evaluate_finding(
@@ -186,7 +187,9 @@ class CacheReplayExperiment:
         experiment_id = uuid4().hex
         principal = Principal(principal_id=principal_id, role=Role.USER)
         expected_canary = app_module.PROTECTED_RESOURCES[resource_id]["canary"]
-        cache_key = self._cache_key(experiment_id, principal_id, resource_id)
+        tenant_resolver = getattr(self._policy, "tenant_for", None)
+        tenant_id = tenant_resolver(principal_id) if callable(tenant_resolver) else None
+        cache_key = self._cache_key(experiment_id, principal_id, resource_id, tenant_id=tenant_id)
 
         # A: grant and verify directly against the origin.
         self._policy.grant(principal_id, resource_id)
@@ -198,6 +201,7 @@ class CacheReplayExperiment:
             resource_id,
             cache_key,
             ttl_seconds=ttl_seconds,
+            tenant_id=tenant_id,
         )
         prime_canary = self._response_canary(prime_response)
         primed_entry = (
@@ -214,6 +218,7 @@ class CacheReplayExperiment:
             and primed_entry.metadata is not None
             and primed_entry.metadata.principal_id == principal_id
             and primed_entry.metadata.resource_id == resource_id
+            and primed_entry.metadata.tenant_id == tenant_id
             and self._response_canary(primed_entry.response) == expected_canary
         )
 
@@ -230,6 +235,7 @@ class CacheReplayExperiment:
             resource_id,
             cache_key,
             ttl_seconds=ttl_seconds,
+            tenant_id=tenant_id,
         )
         oracle_result = evaluate_observation_finding(
             origin_status=bypassed_response.status_code,
@@ -253,10 +259,10 @@ class CacheReplayExperiment:
             expected_canary=expected_canary.encode("utf-8"),
         )
         prime_metadata_evidence = self._metadata_evidence(
-            primed_entry, principal_id=principal_id, resource_id=resource_id
+            primed_entry, principal_id=principal_id, resource_id=resource_id, tenant_id=tenant_id
         )
         replay_metadata_evidence = self._metadata_evidence(
-            observation, principal_id=principal_id, resource_id=resource_id
+            observation, principal_id=principal_id, resource_id=resource_id, tenant_id=tenant_id
         )
         diagnostic_categories = self._diagnostic_categories(
             primed_entry, observation
@@ -295,6 +301,7 @@ class CacheReplayExperiment:
             cache_observation_status=observation.status.value,
             differential_state=differential.state.value,
             analysis_evidence=analysis_evidence,
+            tenant_id=tenant_id,
         )
 
     @staticmethod
@@ -303,6 +310,7 @@ class CacheReplayExperiment:
         *,
         principal_id: str,
         resource_id: str,
+        tenant_id: str | None = None,
     ) -> CacheMetadataEvidence:
         metadata = observation.metadata
         if metadata is None:
@@ -313,6 +321,7 @@ class CacheReplayExperiment:
             and response is not None
             and metadata.principal_id == principal_id
             and metadata.resource_id == resource_id
+            and metadata.tenant_id == tenant_id
             and metadata.response_status == response.status_code
             and metadata.verify_body(response.body)
         )
@@ -361,6 +370,7 @@ class CacheReplayExperiment:
         cache_key: str,
         *,
         ttl_seconds: int,
+        tenant_id: str | None = None,
     ) -> tuple[CacheStatus, Optional[CachedHTTPResponse], CacheObservation]:
         observation = self._cache.observe(cache_key)
         if observation.status is CacheObservationStatus.HIT:
@@ -369,6 +379,7 @@ class CacheReplayExperiment:
                 metadata is None
                 or metadata.principal_id != principal_id
                 or metadata.resource_id != resource_id
+                or metadata.tenant_id != tenant_id
             ):
                 observation = CacheObservation(
                     CacheObservationStatus.INVALID_METADATA,
@@ -396,6 +407,7 @@ class CacheReplayExperiment:
                 response_status=snapshot.status_code,
                 body=snapshot.body,
                 ttl_seconds=ttl_seconds,
+                tenant_id=tenant_id,
             )
             try:
                 self._cache.store(
@@ -424,10 +436,13 @@ class CacheReplayExperiment:
         experiment_id: str,
         principal_id: str,
         resource_id: str,
+        *,
+        tenant_id: str | None = None,
     ) -> str:
+        tenant_segment = f"tenant:{quote(tenant_id, safe='')}:" if tenant_id is not None else ""
         return (
             f"experiment:{quote(experiment_id, safe='')}:"
-            f"protected:{quote(principal_id, safe='')}:"
+            f"{tenant_segment}protected:{quote(principal_id, safe='')}:"
             f"{quote(resource_id, safe='')}"
         )
 
