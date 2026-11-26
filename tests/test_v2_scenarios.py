@@ -115,6 +115,12 @@ def test_missing_required_scenario_field_has_actionable_error():
         ScenarioLoader().loads(malformed)
 
 
+def test_tenant_mapping_requires_id_field():
+    malformed = VALID.replace("- id: tenant-a", "- name: tenant-a")
+    with pytest.raises(ValueError, match="tenant.*id"):
+        ScenarioLoader().loads(malformed)
+
+
 def test_transition_engine_validates_direct_scenario_before_execution():
     invalid = Scenario(
         scenario_id="invalid", name="Invalid direct input", schema_version=1,
