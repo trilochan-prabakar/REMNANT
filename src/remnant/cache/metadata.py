@@ -8,6 +8,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+def _finite_timestamp(value: Any) -> bool:
+    """Accept finite float timestamps and arbitrary-precision integer seconds."""
+    if type(value) is int:
+        return True
+    return type(value) is float and math.isfinite(value)
+
+
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -46,10 +53,8 @@ class CacheMetadata:
         if not isinstance(self.body_sha256, str) or not _DIGEST_RE.fullmatch(self.body_sha256):
             raise ValueError("body_sha256 must be a lowercase SHA-256 hex digest")
         if (
-            type(self.created_at) not in (int, float)
-            or type(self.expires_at) not in (int, float)
-            or not math.isfinite(self.created_at)
-            or not math.isfinite(self.expires_at)
+            not _finite_timestamp(self.created_at)
+            or not _finite_timestamp(self.expires_at)
         ):
             raise ValueError("created_at and expires_at must be finite numeric Unix timestamps")
         if self.expires_at <= self.created_at:
@@ -71,7 +76,7 @@ class CacheMetadata:
             raise ValueError("ttl_seconds must be a positive integer")
         if now is None:
             now = datetime.now(timezone.utc).timestamp()
-        if type(now) not in (int, float) or not math.isfinite(now):
+        if not _finite_timestamp(now):
             raise ValueError("now must be a finite numeric Unix timestamp")
         if not isinstance(body, bytes):
             raise TypeError("body must be bytes")
