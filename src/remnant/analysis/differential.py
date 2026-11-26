@@ -97,7 +97,9 @@ def compare_responses(
     else:
         origin_has = expected_canary in origin.body
         cache_has = expected_canary in cached.body
-        canary = _dimension(origin_has == cache_has, origin_has, cache_has)
+        # A canary comparison matches only when both responses contain the
+        # expected marker. Two responses both missing it are not a valid match.
+        canary = _dimension(origin_has and cache_has, origin_has, cache_has)
 
     dimensions = (status, headers, body)
     evaluated = dimensions + ((canary,) if expected_canary is not None else ())
