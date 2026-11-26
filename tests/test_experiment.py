@@ -320,6 +320,67 @@ def test_experiment_routes_all_origin_requests_through_injected_adapter():
     ]
 
 
+def test_all_origin_requests_in_one_run_share_the_same_event_loop():
+    import asyncio
+
+    class LoopBoundAdapter:
+        def __init__(self, policy):
+            self._adapter = RecordingOriginAdapter(policy)
+            self.loop_ids = []
+
+        async def get_protected(self, resource_id, *, principal_id):
+            self.loop_ids.append(id(asyncio.get_running_loop()))
+            return await self._adapter.get_protected(
+                resource_id, principal_id=principal_id
+            )
+
+    policy = AuthorizationPolicy()
+    adapter = LoopBoundAdapter(policy)
+    experiment = CacheReplayExperiment(
+        cache=RedisCacheManager(client=ExpiringRedis(), key_prefix="loop-bound:"),
+        policy=policy,
+        origin_adapter=adapter,
+    )
+
+    result = experiment.run("alice", "document-1")
+
+    assert result.finding_status == "CONFIRMED"
+    assert len(adapter.loop_ids) == 3
+    assert len(set(adapter.loop_ids)) == 1
+
+
+def test_separate_experiment_runs_receive_separate_event_loops():
+    import asyncio
+
+    class LoopRecordingAdapter:
+        def __init__(self, policy):
+            self._adapter = RecordingOriginAdapter(policy)
+            self.run_loop_ids = []
+
+        async def get_protected(self, resource_id, *, principal_id):
+            loop_id = id(asyncio.get_running_loop())
+            if not self.run_loop_ids or self.run_loop_ids[-1] != loop_id:
+                self.run_loop_ids.append(loop_id)
+            return await self._adapter.get_protected(
+                resource_id, principal_id=principal_id
+            )
+
+    policy = AuthorizationPolicy()
+    adapter = LoopRecordingAdapter(policy)
+    experiment = CacheReplayExperiment(
+        cache=RedisCacheManager(client=ExpiringRedis(), key_prefix="loop-run:"),
+        policy=policy,
+        origin_adapter=adapter,
+    )
+
+    first = experiment.run("alice", "document-1")
+    second = experiment.run("bob", "document-1")
+
+    assert first.finding_status == second.finding_status == "CONFIRMED"
+    assert len(adapter.run_loop_ids) == 2
+    assert adapter.run_loop_ids[0] != adapter.run_loop_ids[1]
+
+
 def test_experiment_rejects_both_origin_app_and_adapter():
     policy = AuthorizationPolicy()
     adapter = RecordingOriginAdapter(policy)
