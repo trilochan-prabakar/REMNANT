@@ -70,7 +70,7 @@ def test_control_steps_require_explicit_opt_in_and_use_fixed_endpoints():
             await proxy.aclose()
 
         assert result.status is RunStatus.PASSED
-            assert [item[0] for item in seen] == ["POST", "POST", "GET", "POST", "PURGE"]
+        assert [item[0] for item in seen] == ["POST", "POST", "GET", "POST", "PURGE"]
         assert seen[0][1] == "/__remnant__/control/grant"
         assert seen[1][1] == "/__remnant__/control/update"
         assert seen[3][1] == "/__remnant__/control/revoke"
