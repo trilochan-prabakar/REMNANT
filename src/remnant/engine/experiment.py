@@ -13,6 +13,7 @@ from fastapi import FastAPI
 
 from remnant.api import app as app_module
 from remnant.api.app import create_protected_origin_app
+from remnant.api.v2 import resource_canary
 from remnant.auth.models import Principal, Role
 from remnant.auth.policy import AuthorizationPolicy
 from remnant.cache.manager import (
@@ -192,13 +193,18 @@ class CacheReplayExperiment:
             raise ValueError("resource_id must be a non-empty string")
         if type(ttl_seconds) is not int or ttl_seconds <= 0:
             raise ValueError("ttl_seconds must be a positive integer")
-        if resource_id not in app_module.PROTECTED_RESOURCES:
+        is_tenant_aware = callable(getattr(self._policy, "tenant_for", None))
+        if not is_tenant_aware and resource_id not in app_module.PROTECTED_RESOURCES:
             raise ValueError(f"unknown protected resource: {resource_id}")
 
         started_at = datetime.now(timezone.utc).isoformat()
         experiment_id = uuid4().hex
         principal = Principal(principal_id=principal_id, role=Role.USER)
-        expected_canary = app_module.PROTECTED_RESOURCES[resource_id]["canary"]
+        expected_canary = (
+            app_module.PROTECTED_RESOURCES[resource_id]["canary"]
+            if resource_id in app_module.PROTECTED_RESOURCES
+            else resource_canary(resource_id)
+        )
         tenant_resolver = getattr(self._policy, "tenant_for", None)
         tenant_id = tenant_resolver(principal_id) if callable(tenant_resolver) else None
         cache_key = self._cache_key(experiment_id, principal_id, resource_id, tenant_id=tenant_id)
