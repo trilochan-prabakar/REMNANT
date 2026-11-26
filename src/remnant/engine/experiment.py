@@ -21,7 +21,10 @@ from remnant.cache.manager import (
     RedisCacheManager,
 )
 from remnant.cache.models import CacheObservation, CacheObservationStatus
+from remnant.cache.metadata import CacheMetadata
+from remnant.analysis import compare_responses
 from remnant.analysis.oracle import evaluate_observation_finding
+from remnant.origin.protocols import OriginResponse
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,8 @@ class ExperimentResult:
     finding_status: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    cache_observation_status: Optional[str] = None
+    differential_state: Optional[str] = None
 
 
 def evaluate_finding(
@@ -140,20 +145,23 @@ class CacheReplayExperiment:
         initial_response = self._origin_request(principal_id, resource_id)
 
         # B: use the regular cache path, priming Redis from the authorized origin.
-        prime_status, prime_response = self._cached_request(
+        prime_status, prime_response, _ = self._cached_request(
             principal_id,
             resource_id,
             cache_key,
             ttl_seconds=ttl_seconds,
         )
         prime_canary = self._response_canary(prime_response)
-        primed_entry = self._cache.lookup(cache_key)
+        primed_entry = self._cache.observe(cache_key)
         cache_primed = (
             prime_status is CacheStatus.MISS
             and prime_response is not None
             and prime_response.status_code == 200
             and prime_canary == expected_canary
-            and primed_entry.status is CacheStatus.HIT
+            and primed_entry.status is CacheObservationStatus.HIT
+            and primed_entry.metadata is not None
+            and primed_entry.metadata.principal_id == principal_id
+            and primed_entry.metadata.resource_id == resource_id
             and self._response_canary(primed_entry.response) == expected_canary
         )
 
@@ -165,17 +173,32 @@ class CacheReplayExperiment:
         bypassed_response = self._origin_request(principal_id, resource_id)
 
         # E: normal cache path must return the still-live snapshot if it exists.
-        normal_status, normal_response = self._cached_request(
+        normal_status, normal_response, observation = self._cached_request(
             principal_id,
             resource_id,
             cache_key,
             ttl_seconds=ttl_seconds,
         )
-        oracle = evaluate_finding(
+        oracle_result = evaluate_observation_finding(
             origin_status=bypassed_response.status_code,
-            cache_status=normal_status,
-            response_body=(normal_response.body if normal_response is not None else None),
+            observation=observation,
             expected_canary=expected_canary,
+        )
+        oracle = FindingOracle(
+            origin_denies=oracle_result.origin_denies,
+            cache_hit=oracle_result.cache_hit,
+            canary_matches=oracle_result.canary_matches,
+            finding_confirmed=oracle_result.finding_confirmed,
+        )
+        origin_snapshot = OriginResponse(
+            status_code=bypassed_response.status_code,
+            headers=tuple(bypassed_response.headers.multi_items()),
+            body=bypassed_response.content,
+        )
+        differential = compare_responses(
+            origin_snapshot,
+            observation,
+            expected_canary=expected_canary.encode("utf-8"),
         )
         completed_at = datetime.now(timezone.utc).isoformat()
 
@@ -197,6 +220,8 @@ class CacheReplayExperiment:
             finding_status="CONFIRMED" if oracle.finding_confirmed else "NOT_FOUND",
             started_at=started_at,
             completed_at=completed_at,
+            cache_observation_status=observation.status.value,
+            differential_state=differential.state.value,
         )
 
     def _origin_request(self, principal_id: str, resource_id: str) -> httpx.Response:
@@ -220,10 +245,27 @@ class CacheReplayExperiment:
         cache_key: str,
         *,
         ttl_seconds: int,
-    ) -> tuple[CacheStatus, Optional[CachedHTTPResponse]]:
-        cached = self._cache.lookup(cache_key)
-        if cached.status is CacheStatus.HIT:
-            return cached.status, cached.response
+    ) -> tuple[CacheStatus, Optional[CachedHTTPResponse], CacheObservation]:
+        observation = self._cache.observe(cache_key)
+        if observation.status is CacheObservationStatus.HIT:
+            metadata = observation.metadata
+            if (
+                metadata is None
+                or metadata.principal_id != principal_id
+                or metadata.resource_id != resource_id
+            ):
+                observation = CacheObservation(
+                    CacheObservationStatus.INVALID_METADATA,
+                    diagnostic="cache metadata identity does not match the request",
+                )
+            else:
+                return CacheStatus.HIT, observation.response, observation
+
+        if observation.status not in (
+            CacheObservationStatus.MISS,
+            CacheObservationStatus.EXPIRED,
+        ):
+            return CacheStatus.MISS, None, observation
 
         response = self._origin_request(principal_id, resource_id)
         snapshot = CachedHTTPResponse(
@@ -232,8 +274,20 @@ class CacheReplayExperiment:
             body=response.content,
         )
         if response.status_code == 200:
-            self._cache.store(cache_key, snapshot, ttl_seconds=ttl_seconds)
-        return CacheStatus.MISS, snapshot
+            metadata = CacheMetadata.create(
+                principal_id=principal_id,
+                resource_id=resource_id,
+                response_status=snapshot.status_code,
+                body=snapshot.body,
+                ttl_seconds=ttl_seconds,
+            )
+            self._cache.store(
+                cache_key,
+                snapshot,
+                ttl_seconds=ttl_seconds,
+                metadata=metadata,
+            )
+        return CacheStatus.MISS, snapshot, CacheObservation(CacheObservationStatus.MISS)
 
     @staticmethod
     def _cache_key(
