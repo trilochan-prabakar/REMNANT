@@ -50,7 +50,8 @@ record. A transport error stops the scenario and produces an ERROR result.
 Scenarios may also use constrained fixture-control steps: `grant`, `revoke`,
 and `update` call only fixed `/__remnant__/control/{action}` endpoints on the
 configured origin, while `purge` sends a Varnish-style PURGE to a relative path
-on the configured proxy. These state-changing steps are disabled by default;
+on the configured proxy. The update action is limited to a small content value
+and is intended for isolated fixture resource-version tests. These state-changing steps are disabled by default;
 enable them only with `allow_control_operations=True` when using an isolated,
 authorized test fixture. No arbitrary control URL or HTTP method can be supplied.
 

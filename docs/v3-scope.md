@@ -99,3 +99,17 @@ The following planned V3 capabilities have been implemented on the `v3-developme
 - [x] V3-specific GitHub Actions workflow and tests.
 
 Completion is not declared until the full existing regression suite, the V3-specific suite, and the Varnish integration workflow pass. CI results and any remaining limitations must be recorded before V3 is considered release-ready.
+
+
+## Validation record
+
+The current V3 development head has passed:
+- the complete Python regression suite covering existing V1/V2 and new V3 tests;
+- V3 module compilation;
+- the isolated Varnish 7.6 lifecycle scenario;
+- the existing Docker Compose demo; and
+- the existing real Nginx `proxy_cache` integration.
+
+The Varnish scenario covers grant/revoke replay, cross-identity cache-key collision,
+resource-content update staleness, and explicit PURGE invalidation. V3 remains on
+its separate development branch and is not merged or frozen by this record.

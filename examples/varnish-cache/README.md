@@ -1,8 +1,9 @@
 # REMNANT V3 — Varnish integration fixture
 
 This isolated fixture runs a local origin behind Varnish 7.6. It intentionally
-contains two cache authorization failures so REMNANT can test both stale replay
-and cross-identity isolation using a real reverse proxy.
+contains two cache authorization failures plus a stale resource-version case,
+allowing REMNANT to test replay, cross-identity isolation, and invalidation
+against a real reverse proxy.
 
 ## Run
 
