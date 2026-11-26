@@ -10,9 +10,12 @@ from typing import Any
 
 def _finite_timestamp(value: Any) -> bool:
     """Accept finite float timestamps and arbitrary-precision integer seconds."""
-    if type(value) is int:
-        return True
-    return type(value) is float and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
