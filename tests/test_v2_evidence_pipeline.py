@@ -40,6 +40,17 @@ class UnavailableRedis:
         raise RedisConnectionError("redis is unavailable")
 
 
+class WriteFailingRedis:
+    def __init__(self):
+        self.values = {}
+
+    def get(self, key):
+        return self.values.get(key)
+
+    def set(self, key, value, *, ex):
+        raise RedisConnectionError("redis write is unavailable")
+
+
 def make_store(tmp_path):
     return SQLiteEvidenceStore(tmp_path / "pipeline.sqlite3")
 
@@ -100,6 +111,36 @@ def test_cache_backend_error_remains_indeterminate_through_storage_and_reports(t
     assert analysis["differential"]["state"] == "INDETERMINATE"
     assert "CACHE_BACKEND_ERROR" in analysis["diagnostic_categories"]
     assert report["analysis"]["replay_observation_status"] == "BACKEND_ERROR"
+    assert report["oracle"]["finding_confirmed"] is False
+
+
+def test_cache_write_failure_is_recorded_and_never_reported_as_a_prime(tmp_path):
+    cache = RedisCacheManager(
+        client=WriteFailingRedis(), key_prefix=f"pipeline:{uuid4().hex}:"
+    )
+    result = CacheReplayExperiment(cache=cache).run("alice", "document-1")
+    store = make_store(tmp_path)
+
+    store.save_experiment(result)
+    saved = store.get_experiment(result.experiment_id)
+    report = json.loads(
+        ReportGenerator(store, tmp_path / "reports")
+        .generate_json(result.experiment_id)
+        .read_text()
+    )
+    analysis = json.loads(saved["analysis"]["analysis_json"])
+
+    assert result.cache_primed is False
+    assert result.cache_prime_status is CacheStatus.MISS
+    assert analysis["cache_prime_observation_status"] == "BACKEND_ERROR"
+    assert analysis["cache_prime_metadata"]["present"] is False
+    assert "CACHE_BACKEND_ERROR" in analysis["diagnostic_categories"]
+    assert result.permission_revoked is True
+    assert result.origin_status_after_revocation == 403
+    assert result.oracle_cache_hit is False
+    assert result.finding_status == "NOT_FOUND"
+    assert saved["finding_status"] == "NOT_FOUND"
+    assert report["analysis"]["cache_prime_observation_status"] == "BACKEND_ERROR"
     assert report["oracle"]["finding_confirmed"] is False
 
 
