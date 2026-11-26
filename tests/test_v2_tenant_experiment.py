@@ -1,5 +1,6 @@
 """End-to-end tests for the separately selectable tenant-aware V2 path."""
 
+import hashlib
 import json
 from uuid import uuid4
 
@@ -101,8 +102,9 @@ def test_v2_origin_serves_resources_registered_outside_v1_sample_catalogue():
     assert result.oracle_cache_hit is True
     assert result.oracle_canary_matches is True
     assert result.finding_status == "CONFIRMED"
-    assert result.cached_canary.endswith(
-        __import__("hashlib").sha256(b"customer-export-42").hexdigest()[:8]
+    assert result.cached_canary == (
+        f"remnant-canary-customer-export-42-"
+        f"{hashlib.sha256(b'customer-export-42').hexdigest()[:8]}"
     )
 
 
