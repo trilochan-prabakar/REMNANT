@@ -44,13 +44,12 @@ class LoopbackHTTPOriginAdapter:
         ):
             raise ValueError("base_url must be a plain loopback HTTP(S) origin URL")
 
-        is_loopback_name = hostname.lower() == "localhost"
         try:
             is_loopback_ip = ipaddress.ip_address(hostname).is_loopback
         except ValueError:
             is_loopback_ip = False
-        if not (is_loopback_name or is_loopback_ip):
-            raise ValueError("origin adapter only permits loopback destinations")
+        if not is_loopback_ip:
+            raise ValueError("origin adapter only permits literal loopback IP addresses")
         if port is None:
             raise ValueError("base_url must include an explicit port")
 
