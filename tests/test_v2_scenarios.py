@@ -107,3 +107,27 @@ def test_removed_identity_cannot_be_reactivated_in_scenario():
 def test_empty_scenario_document_is_rejected():
     with pytest.raises(ValueError, match="cannot be empty"):
         ScenarioLoader().loads(" ")
+
+
+def test_missing_required_scenario_field_has_actionable_error():
+    malformed = VALID.replace("  name: Authorization Revocation Replay\n", "")
+    with pytest.raises(ValueError, match="scenario.*name"):
+        ScenarioLoader().loads(malformed)
+
+
+def test_tenant_mapping_requires_id_field():
+    malformed = VALID.replace("- id: tenant-a", "- name: tenant-a")
+    with pytest.raises(ValueError, match="tenant.*id"):
+        ScenarioLoader().loads(malformed)
+
+
+def test_transition_engine_validates_direct_scenario_before_execution():
+    invalid = Scenario(
+        scenario_id="invalid", name="Invalid direct input", schema_version=1,
+        tenants=("tenant-a",),
+        identities=(ScenarioIdentity("alice", "tenant-a"),),
+        resources=(),
+        steps=(ScenarioStep("grant_permission", principal="alice", resource="missing"),),
+    )
+    with pytest.raises(ScenarioValidationError, match="unknown resource"):
+        ScenarioTransitionEngine().execute(invalid)

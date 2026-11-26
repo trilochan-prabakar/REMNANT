@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from remnant.scenarios.models import Scenario, ScenarioStep
+from remnant.scenarios.validator import ScenarioValidator
 
 
 @dataclass
@@ -29,6 +30,9 @@ class ScenarioTransitionEngine:
     }
 
     def execute(self, scenario: Scenario) -> ScenarioState:
+        # Validate the complete document before applying any state transition.
+        # This keeps direct callers as safe as callers using ScenarioLoader.
+        ScenarioValidator().validate(scenario)
         state = ScenarioState()
         for index, step in enumerate(scenario.steps, start=1):
             self.apply(state, step, index=index)

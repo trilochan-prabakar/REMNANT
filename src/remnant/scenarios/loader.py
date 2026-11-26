@@ -30,6 +30,12 @@ class ScenarioLoader:
         return self.from_mapping(data)
 
     @staticmethod
+    def _required_field(mapping: dict[str, Any], field: str, section: str) -> Any:
+        if field not in mapping:
+            raise ValueError(f"'{section}' is missing required field '{field}'")
+        return mapping[field]
+
+    @staticmethod
     def from_mapping(data: Any) -> Scenario:
         if not isinstance(data, dict):
             raise ValueError("scenario document must be a mapping")
@@ -50,8 +56,8 @@ class ScenarioLoader:
 
         identities = tuple(
             ScenarioIdentity(
-                identity_id=item["id"],
-                tenant_id=item["tenant"],
+                identity_id=ScenarioLoader._required_field(item, "id", "identity"),
+                tenant_id=ScenarioLoader._required_field(item, "tenant", "identity"),
                 roles=tuple(item.get("roles", ["user"])),
             )
             for item in identities_data
@@ -62,9 +68,9 @@ class ScenarioLoader:
 
         resources = tuple(
             ScenarioResource(
-                resource_id=item["id"],
-                tenant_id=item["tenant"],
-                owner_id=item["owner"],
+                resource_id=ScenarioLoader._required_field(item, "id", "resource"),
+                tenant_id=ScenarioLoader._required_field(item, "tenant", "resource"),
+                owner_id=ScenarioLoader._required_field(item, "owner", "resource"),
             )
             for item in resources_data
             if isinstance(item, dict)
@@ -74,7 +80,7 @@ class ScenarioLoader:
 
         steps = tuple(
             ScenarioStep(
-                action=item["action"],
+                action=ScenarioLoader._required_field(item, "action", "step"),
                 principal=item.get("principal"),
                 resource=item.get("resource"),
                 permission=item.get("permission", "read"),
@@ -86,10 +92,14 @@ class ScenarioLoader:
             raise ValueError("each step must be a mapping")
 
         return Scenario(
-            scenario_id=scenario_data["id"],
-            name=scenario_data["name"],
+            scenario_id=ScenarioLoader._required_field(scenario_data, "id", "scenario"),
+            name=ScenarioLoader._required_field(scenario_data, "name", "scenario"),
             schema_version=scenario_data.get("schema_version", data.get("schema_version", 1)),
-            tenants=tuple(item["id"] if isinstance(item, dict) else item for item in tenants_data),
+            tenants=tuple(
+                ScenarioLoader._required_field(item, "id", "tenant")
+                if isinstance(item, dict) else item
+                for item in tenants_data
+            ),
             identities=identities,
             resources=resources,
             steps=steps,
